@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.CloudBackup" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Primary brand color. -->
+        <item name="colorPrimary">#6650a4</item>
+        <item name="colorOnPrimary">#ffffff</item>
+        <item name="colorPrimaryContainer">#eaddff</item>
+        <item name="colorOnPrimaryContainer">#21005d</item>
+        <!-- Secondary colors. -->
+        <item name="colorSecondary">#625b71</item>
+        <item name="colorOnSecondary">#ffffff</item>
+        <item name="colorSecondaryContainer">#e8def8</item>
+        <item name="colorOnSecondaryContainer">#1d192b</item>
+        <!-- Tertiary colors. -->
+        <item name="colorTertiary">#7d5260</item>
+        <item name="colorOnTertiary">#ffffff</item>
+        <item name="colorTertiaryContainer">#ffd8e4</item>
+        <item name="colorOnTertiaryContainer">#31111d</item>
+        <!-- Background colors. -->
+        <item name="android:colorBackground">#fffbfe</item>
+        <item name="colorOnBackground">#1c1b1f</item>
+        <!-- Surface colors. -->
+        <item name="colorSurface">#fffbfe</item>
+        <item name="colorOnSurface">#1c1b1f</item>
+        <item name="colorSurfaceVariant">#e7e0ec</item>
+        <item name="colorOnSurfaceVariant">#49454f</item>
+        <!-- Error colors. -->
+        <item name="colorError">#ba1a1a</item>
+        <item name="colorErrorContainer">#ffdad6</item>
+        <item name="colorOnError">#ffffff</item>
+        <item name="colorOnErrorContainer">#410002</item>
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">?attr/colorPrimary</item>
+    </style>
+</resources>

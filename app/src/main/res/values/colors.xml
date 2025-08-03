@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light theme colors -->
+    <color name="primary">#2196F3</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="primary_container">#BBDEFB</color>
+    <color name="on_primary_container">#0D47A1</color>
+
+    <color name="secondary">#03A9F4</color>
+    <color name="on_secondary">#000000</color>
+    <color name="secondary_container">#B3E5FC</color>
+    <color name="on_secondary_container">#01579B</color>
+
+    <color name="background">#FFFFFF</color>
+    <color name="on_background">#000000</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="on_surface">#000000</color>
+
+    <!-- Also define the “_dark” variants so night references always resolve -->
+    <color name="primary_dark">#90CAF9</color>
+    <color name="primary_container_dark">#1565C0</color>
+    <color name="on_primary_container_dark">#E3F2FD</color>
+
+    <color name="secondary_dark">#42A5F5</color>
+    <color name="on_secondary_dark">#000000</color>
+    <color name="secondary_container_dark">#0D47A1</color>
+    <color name="on_secondary_container_dark">#BBDEFB</color>
+
+    <color name="background_dark">#121212</color>
+    <color name="on_background_dark">#E6E1E5</color>
+    <color name="surface_dark">#1E1E1E</color>
+    <color name="on_surface_dark">#E6E1E5</color>
+</resources>
