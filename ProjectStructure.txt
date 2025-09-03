@@ -1,0 +1,64 @@
+App Modules
+Core/Data
+entity/FileIndex.kt
+Room entity for files, includes all metadata (name, path, size, checksum, timestamps, backup status, etc.)
+TODO: DB Migration if you’ve just added fields like lastAttemptedAt, errorMessage
+
+dao/FileIndexDao.kt
+Includes queries for list, stats, insertion, update, delete, and new stats (errors, failed backups).
+
+repository/FileRepositoryImpl.kt
+Implements domain repository via FileIndexDao.
+
+Core/Domain
+model/BackupStats.kt
+Data model with fields for stats (total, backed up, size, errors, failed files, etc.)
+
+repository/FileRepository.kt
+Domain interface for database operations, in sync with DAO.
+
+usecase/GetBackupStatisticsUseCase.kt
+Orchestrates calls to repository and builds BackupStats for UI.
+
+Features/Main/Presentation
+MainViewModel.kt
+Exposes uiState, triggers scans, refreshes, adds test data, etc.
+
+MainUiState.kt
+Holds UI state including error message, isScanning, backup stats, scan progress.
+
+MainScreen.kt
+Composable UI using state, exposes refresh/add actions, shows stats and files.
+
+components/
+Modular composables: StatisticsCard, ScanProgressCard, FileItem, ErrorCard.
+
+Other
+di/ (Modules for Room, Repos, Network, etc.)
+TODO: Check that dependencies for all new/revised repos/DAOs/use-cases are provided.
+
+ui/theme/
+Material3/Color palette, TODO: fix color resource consistency as shown earlier.
+
+📋 Present Issues/Incomplete Areas
+Room Entity, DAO, Repository, and UseCase Consistency
+
+Are all the fields in FileIndex (incl. lastAttemptedAt, errorMessage) present in both code and schema?
+
+Did you handle database migrations?
+
+ProGuard minification rules
+
+Syntax errors must be fixed for Retrofit/Gson/Room as described.
+
+Color/Resource Definition
+
+Color "primary_dark" and other _dark variants need to be defined in both values-night and base values to avoid runtime errors.
+
+BackupStats Construction
+
+All fields used in UI and code (errorCount, failedFiles) must be properly initialized and provided everywhere BackupStats is created.
+
+Dependency Injection
+
+Dagger/Hilt modules must provide the new or changed use cases and repositories.
