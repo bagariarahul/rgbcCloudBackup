@@ -1,7 +1,10 @@
 package com.rgbc.cloudBackup.di
 
 import android.content.Context
+import com.rgbc.cloudBackup.core.security.AndroidKeystoreKeyProvider
 import com.rgbc.cloudBackup.core.security.CryptoManager
+import com.rgbc.cloudBackup.core.security.CryptoManagerImpl
+import com.rgbc.cloudBackup.core.security.KeyProvider
 import com.rgbc.cloudBackup.core.security.SecureChecksumUtils
 import dagger.Module
 import dagger.Provides
@@ -18,9 +21,14 @@ object SecurityModule {
     @Singleton
     fun provideCryptoManager(
         @ApplicationContext context: Context
-    ): CryptoManager = CryptoManager(context)
+    ): CryptoManager = CryptoManagerImpl(context)
 
     @Provides
     @Singleton
     fun provideSecureChecksumUtils(): SecureChecksumUtils = SecureChecksumUtils()
+
+    @Provides
+    @Singleton
+    fun provideKeyProvider(): KeyProvider =
+        AndroidKeystoreKeyProvider()
 }
