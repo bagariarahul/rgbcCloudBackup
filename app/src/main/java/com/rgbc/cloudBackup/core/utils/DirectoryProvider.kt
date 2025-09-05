@@ -44,4 +44,10 @@ class DirectoryProvider @Inject constructor(
         Timber.d("Backup directory: ${backupDir.absolutePath}")
         return backupDir.absolutePath
     }
+    fun getInternalStorageDirectory(): File {
+        Timber.d("Getting internal storage directory: ${context.filesDir}")
+        return context.filesDir
+    }
+
+
 }

@@ -16,6 +16,8 @@ import java.util.*
 
 @Composable
 fun FileItem(file: FileIndex, modifier: Modifier = Modifier) {
+    val safeDisplayName = "File_${file.name.hashCode().toString().takeLast(8)}"
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -23,7 +25,7 @@ fun FileItem(file: FileIndex, modifier: Modifier = Modifier) {
             .clickable {}
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = file.name)
+            Text(text = safeDisplayName) // ← Show safe name instead of actual filename
             Text(text = "${file.fileType} • ${formatFileSize(file.size)}")
             Text(text = "Modified: ${formatDate(file.modifiedAt)}")
             if (file.isBackedUp) {
@@ -32,6 +34,7 @@ fun FileItem(file: FileIndex, modifier: Modifier = Modifier) {
         }
     }
 }
+
 
 // Helpers
 fun formatFileSize(bytes: Long): String {

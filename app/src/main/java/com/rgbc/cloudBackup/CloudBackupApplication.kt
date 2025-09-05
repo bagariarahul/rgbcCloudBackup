@@ -9,19 +9,13 @@ class CloudBackupApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-
         // Initialize SQLCipher native library
         initializeSQLCipher()
-
-        // Initialize logging
+        // Initialize Timber logger
         initializeLogging()
-
         Timber.i("CloudBackup Application started")
     }
 
-    /**
-     * Initialize SQLCipher native library
-     */
     private fun initializeSQLCipher() {
         try {
             System.loadLibrary("sqlcipher")

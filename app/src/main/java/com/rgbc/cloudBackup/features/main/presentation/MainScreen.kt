@@ -1,4 +1,3 @@
-// File: MainScreen.kt
 package com.rgbc.cloudBackup.features.main.presentation
 
 import androidx.compose.foundation.layout.*
@@ -6,23 +5,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rgbc.cloudBackup.core.data.database.entity.FileIndex
-import com.rgbc.cloudBackup.core.domain.model.BackupStats
 import com.rgbc.cloudBackup.features.main.presentation.components.ErrorCard
 import com.rgbc.cloudBackup.features.main.presentation.components.FileItem
 import com.rgbc.cloudBackup.features.main.presentation.components.ScanProgressCard
 import com.rgbc.cloudBackup.features.main.presentation.components.StatisticsCard
-import java.text.SimpleDateFormat
-import java.util.*
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,9 +34,10 @@ fun MainScreen(
     val allFiles by viewModel.allFiles.collectAsStateWithLifecycle(initialValue = emptyList())
     val filesToBackup by viewModel.filesToBackup.collectAsStateWithLifecycle(initialValue = emptyList())
 
+    Timber.d("MainScreen composed with ${allFiles.size} files and scanningState = ${uiState.isScanning}")
+
     Column(
-        modifier = modifier
-            .padding(16.dp)
+        modifier = modifier.padding(16.dp)
     ) {
         // Header
         Text(
@@ -47,22 +48,24 @@ fun MainScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Summary statistics
         StatisticsCard(statistics = uiState.backupStatistics)
 
-        // Scan progress
         uiState.scanProgress?.let { progress ->
+            Timber.d("Scan progress received: $progress")
             ScanProgressCard(progress = progress)
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Action Buttons
+        // Action Buttons Row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(
-                onClick = { viewModel.refreshData() },
+                onClick = {
+                    Timber.i("Refresh button clicked")
+                    viewModel.refreshData()
+                },
                 enabled = !uiState.isScanning,
                 modifier = Modifier.weight(1f)
             ) {
@@ -72,7 +75,10 @@ fun MainScreen(
             }
 
             Button(
-                onClick = { viewModel.addTestFile() },
+                onClick = {
+                    Timber.i("Add Test File button clicked")
+                    viewModel.addTestFile()
+                },
                 enabled = !uiState.isScanning,
                 modifier = Modifier.weight(1f)
             ) {
@@ -80,12 +86,41 @@ fun MainScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Add Test File")
             }
+            // Add this after the Upload button
+
+        }
+
+        Button(
+            onClick = { viewModel.testDownloadFile() },
+            enabled = !uiState.isScanning,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.LockOpen, contentDescription = "Test Download")
+            Spacer(Modifier.width(8.dp))
+            Text("Test Download")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Error message
+        // Upload Test Button full width
+        Button(
+            onClick = {
+                Timber.i("Test Upload button clicked")
+                viewModel.testUploadFile()
+            },
+            enabled = !uiState.isScanning,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.Upload, contentDescription = "Test Upload")
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Test Upload")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Display errors if present
         uiState.errorMessage?.let { message ->
+            Timber.w("Error displayed: $message")
             ErrorCard(errorMessage = message, onDismiss = viewModel::clearError)
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -100,10 +135,12 @@ fun MainScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
+
             items(allFiles) { file ->
                 FileItem(file = file, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(4.dp))
             }
+
             if (allFiles.isEmpty() && !uiState.isScanning) {
                 item {
                     Text(

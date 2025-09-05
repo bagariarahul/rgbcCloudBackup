@@ -146,5 +146,24 @@ dependencies {
 
     implementation(libs.dagger.core)
     kapt(libs.dagger.compiler)
+
+    // Unit tests
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.androidx.arch.core.testing)
+
+    // Instrumented tests
+    androidTestImplementation(libs.kotlin.test)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.arch.core.testing)
+    // Unit test dependencies (these work)
+    testImplementation(libs.mockito.core)
+    testImplementation(libs.mockito.kotlin)
+
+    // ADD THESE for Android instrumented tests
+    androidTestImplementation(libs.mockito.core)
+    androidTestImplementation(libs.mockito.kotlin)
+
+
 }
 

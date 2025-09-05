@@ -13,21 +13,21 @@ import retrofit2.http.Path
 interface BackupApiService {
 
     @Multipart
-    @POST("api/v1/files/upload")
+    @POST("post")
     suspend fun uploadFile(
         @Part file: MultipartBody.Part,
         @Part("metadata") metadata: String
     ): Response<FileUploadResponse>
 
-    @GET("api/v1/files/{fileId}/download")
+    @GET("get")
     suspend fun downloadFile(
         @Path("fileId") fileId: String
     ): Response<ResponseBody>
 
-    @GET("api/v1/files")
+    @GET("get")
     suspend fun getFileList(): Response<List<FileMetadata>>
 
-    @DELETE("api/v1/files/{fileId}")
+    @DELETE("delete")
     suspend fun deleteFile(
         @Path("fileId") fileId: String
     ): Response<Unit>

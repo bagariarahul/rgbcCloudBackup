@@ -37,6 +37,8 @@ room-testing = "2.7.2"
 work-testing = "2.10.3"
 material-components = "1.9.0"
 dagger = "2.57"
+arch-core-testing = "2.2.0"
+kotlin-test = "2.2.0"
 
 [libraries]
 androidx-core-ktx             = { group = "androidx.core", name = "core-ktx", version.ref = "core-ktx" }
@@ -102,7 +104,9 @@ androidx-work-testing           = { group = "androidx.work", name = "work-testin
 
 androidx-test-runner = { group = "androidx.test", name = "runner", version = "1.7.0" }
 google-material = { group = "com.google.android.material", name = "material", version.ref = "material-components" }
-
+androidx-arch-core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "arch-core-testing" }
+kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin-test" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 dagger-core     = { group = "com.google.dagger", name = "dagger",            version.ref = "dagger" }
 dagger-compiler = { group = "com.google.dagger", name = "dagger-compiler",   version.ref = "dagger" }
 

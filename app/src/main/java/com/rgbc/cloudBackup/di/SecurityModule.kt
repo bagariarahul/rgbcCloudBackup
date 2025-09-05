@@ -6,6 +6,7 @@ import com.rgbc.cloudBackup.core.security.CryptoManager
 import com.rgbc.cloudBackup.core.security.CryptoManagerImpl
 import com.rgbc.cloudBackup.core.security.KeyProvider
 import com.rgbc.cloudBackup.core.security.SecureChecksumUtils
+import com.rgbc.cloudBackup.core.security.SecurityAuditLogger
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -19,9 +20,16 @@ object SecurityModule {
 
     @Provides
     @Singleton
-    fun provideCryptoManager(
+    fun provideSecurityAuditLogger(
         @ApplicationContext context: Context
-    ): CryptoManager = CryptoManagerImpl(context)
+    ): SecurityAuditLogger = SecurityAuditLogger(context)
+
+    @Provides
+    @Singleton
+    fun provideCryptoManager(
+        @ApplicationContext context: Context,  // ← Make sure this has @ApplicationContext
+        auditLogger: SecurityAuditLogger
+    ): CryptoManager = CryptoManagerImpl(context, auditLogger)
 
     @Provides
     @Singleton
@@ -29,6 +37,5 @@ object SecurityModule {
 
     @Provides
     @Singleton
-    fun provideKeyProvider(): KeyProvider =
-        AndroidKeystoreKeyProvider()
+    fun provideKeyProvider(): KeyProvider = AndroidKeystoreKeyProvider()
 }
