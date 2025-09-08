@@ -37,14 +37,14 @@ class DownloadFileUseCase @Inject constructor(
             emit(DownloadProgress.Downloading(safeName, 0.3f))
 
             // Mock encrypted content for now - in real app this would come from server
-            val mockEncryptedData = createMockEncryptedFile(fileIndex)
+            val encryptedFile = downloadFromServer()
 
             emit(DownloadProgress.Downloading(safeName, 0.7f))
 
             // 2. Decrypt the file
             emit(DownloadProgress.Decrypting(safeName))
             val outputFile = File(downloadsDir, fileIndex.name)
-            val result = cryptoManager.decryptFile(mockEncryptedData, outputFile)
+            val result = cryptoManager.decryptFile(encryptedFile, outputFile)
 
             when (result) {
                 is DecryptedFileResult.Success -> {
@@ -66,19 +66,19 @@ class DownloadFileUseCase @Inject constructor(
     }
 
     // Create mock encrypted data for testing
-    private suspend fun createMockEncryptedFile(fileIndex: FileIndex): EncryptedFile {
-        // Create some test content
-        val testContent = "Mock downloaded content for ${fileIndex.name}\nOriginal size: ${fileIndex.size} bytes"
-        val encryptedData = cryptoManager.encryptData(testContent.toByteArray())
+    private suspend fun downloadFromServer(): EncryptedFile {
+        val response = apiService.downloadFile("anonymous", "encrypted_backup.dat")
 
-        return EncryptedFile(
-            originalFileName = fileIndex.name,
-            originalSize = testContent.length.toLong(),
-            encryptedData = encryptedData,
-            encryptionAlgorithm = "AES-256-GCM",
-            encryptionTimestamp = System.currentTimeMillis()
-        )
+        if (!response.isSuccessful) {
+            throw Exception("Server download failed: ${response.code()}")
+        }
+
+        val serializedData = response.body()?.bytes()
+            ?: throw Exception("Empty response from server")
+
+        return EncryptedFile.fromSerialized(serializedData)
     }
+
 }
 
 sealed class DownloadProgress {

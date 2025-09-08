@@ -53,7 +53,7 @@ interface FileIndexDao {
     suspend fun countAllFiles(): Int
 
     @Query("SELECT COUNT(*) FROM file_index WHERE isBackedUp = 1")
-    suspend fun countBackedUpFiles(): Int
+    suspend fun     countBackedUpFiles(): Int
 
     @Query("SELECT SUM(size) FROM file_index")
     suspend fun sumAllFileSizes(): Long?

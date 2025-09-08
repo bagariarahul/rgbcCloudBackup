@@ -251,6 +251,15 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    fun createTestFile(context: Context): File {
+        val dir = File(context.filesDir, "uploads").apply { mkdirs() }
+        val timestamp = System.currentTimeMillis()
+        val testFile = File(dir, "TestUpload_$timestamp.txt")
+        testFile.writeText("Hello from device at $timestamp")
+        return testFile
+    }
+
+
 
 
 

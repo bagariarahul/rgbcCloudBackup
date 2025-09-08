@@ -230,15 +230,30 @@ data class EncryptedFile(
 ) {
     companion object {
         fun fromSerialized(serializedData: ByteArray): EncryptedFile {
-            val dataString = String(serializedData, Charsets.UTF_8)
-            val parts = dataString.split("---")
 
-            if (parts.size != 2) {
-                throw Exception("Invalid encrypted file format")
+            val separatorBytes = "---".toByteArray(Charsets.UTF_8)
+            var separatorIndex = -1
+
+            for (i in 0..serializedData.size - separatorBytes.size) {
+                var found = true
+                for (j in separatorBytes.indices) {
+                    if (serializedData[i + j] != separatorBytes[j]) {
+                        found = false
+                        break
+                    }
+                }
+                if (found) {
+                    separatorIndex = i
+                    break
+                }
             }
 
-            val header = parts[0]
-            val binaryData = parts[1].toByteArray(Charsets.ISO_8859_1)
+            if (separatorIndex == -1) throw Exception("Invalid encrypted file format - no separator found")
+
+            // Extract header and binary data
+            val headerBytes = serializedData.sliceArray(0 until separatorIndex)
+            val header = String(headerBytes, Charsets.UTF_8).trim()
+            val binaryData = serializedData.sliceArray(separatorIndex + separatorBytes.size until serializedData.size)
 
             // Parse header
             val headerLines = header.lines()
@@ -260,7 +275,7 @@ data class EncryptedFile(
                 }
             }
 
-            // Extract IV and ciphertext
+            // Extract IV and ciphertext from binary data
             val iv = binaryData.sliceArray(0 until ivLength)
             val ciphertext = binaryData.sliceArray(ivLength until ivLength + dataLength)
 

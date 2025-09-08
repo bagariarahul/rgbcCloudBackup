@@ -9,19 +9,21 @@ import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface BackupApiService {
 
     @Multipart
-    @POST("post")
+    @POST("upload")
     suspend fun uploadFile(
         @Part file: MultipartBody.Part,
         @Part("metadata") metadata: String
     ): Response<FileUploadResponse>
 
-    @GET("get")
+    @GET("download")
     suspend fun downloadFile(
-        @Path("fileId") fileId: String
+        @Query("user") user: String,
+        @Query("file") fileId: String
     ): Response<ResponseBody>
 
     @GET("get")
