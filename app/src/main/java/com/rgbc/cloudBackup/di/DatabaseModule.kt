@@ -9,7 +9,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
+import net.sqlcipher.database.SupportFactory
+
 import javax.inject.Singleton
 
 @Module
@@ -25,7 +26,7 @@ object DatabaseModule {
         val passphrase = getDatabasePassword(context)
 
         // Create SQLCipher support factory
-        val supportFactory = SupportOpenHelperFactory(passphrase)
+        val supportFactory = SupportFactory(passphrase)
 
         return Room.databaseBuilder(
             context,
