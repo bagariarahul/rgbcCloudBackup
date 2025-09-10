@@ -1,5 +1,6 @@
 package com.rgbc.cloudBackup
 
+import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,9 +13,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.rgbc.cloudBackup.core.auth.AuthState
 import com.rgbc.cloudBackup.features.auth.presentation.AuthScreen
 import com.rgbc.cloudBackup.features.auth.presentation.AuthViewModel
+import com.rgbc.cloudBackup.features.directory.presentation.DirectorySelectionScreen
 import com.rgbc.cloudBackup.features.main.presentation.MainScreen
 import com.rgbc.cloudBackup.ui.theme.CloudBackupTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -36,137 +43,87 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    DebugApp()
+                    CloudBackupApp()
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun DebugApp() {
+fun CloudBackupApp() {
     val authViewModel: AuthViewModel = hiltViewModel()
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
-    var currentScreen by remember { mutableStateOf("debug") }
+    val navController = rememberNavController()
+
+    // Permission Handler
+    PermissionHandler()
 
     // Log the current state
     LaunchedEffect(authState) {
         Timber.d("🔍 AuthState changed: $authState")
-        when (authState) {
-            is AuthState.Authenticated -> {
-                Timber.d("✅ User is authenticated: ${(authState as AuthState.Authenticated).user.email}")
-                currentScreen = "main"
-            }
-            is AuthState.Unauthenticated -> {
-                Timber.d("❌ User is not authenticated")
-                currentScreen = "auth"
-            }
-            is AuthState.Loading -> {
-                Timber.d("⏳ Authentication is loading...")
-                currentScreen = "loading"
-            }
-            is AuthState.Error -> {
-                Timber.d("🚨 Authentication error: ${(authState as AuthState.Error).message}")
-                currentScreen = "auth"
-            }
-        }
     }
 
-    // Show different screens based on current state
-    when (currentScreen) {
-        "loading" -> {
+    // Navigation based on auth state
+    when (authState) {
+        is AuthState.Loading -> {
             LoadingScreen(authState = authState)
         }
-        "auth" -> {
+        is AuthState.Unauthenticated, is AuthState.Error -> {
             AuthScreen(
                 onNavigateToMain = {
                     Timber.d("🚀 Navigating to main screen")
-                    currentScreen = "main"
+                    navController.navigate("main") {
+                        popUpTo("auth") { inclusive = true }
+                    }
                 }
             )
         }
-        "main" -> {
-            MainScreen()
-        }
-        "debug" -> {
-            DebugScreen(
-                authState = authState,
-                onForceAuth = { currentScreen = "auth" },
-                onForceMain = { currentScreen = "main" }
-            )
+        is AuthState.Authenticated -> {
+            // Main app navigation
+            NavHost(
+                navController = navController,
+                startDestination = "main"
+            ) {
+                composable("main") {
+                    MainScreen(
+                        onNavigateToAuth = {
+                            authViewModel.logout()
+                        },
+                        onNavigateToDirectories = {
+                            navController.navigate("directories")
+                        }
+                    )
+                }
+
+                composable("directories") {
+                    DirectorySelectionScreen(
+                        onNavigateBack = {
+                            navController.popBackStack()
+                        }
+                    )
+                }
+            }
         }
     }
 }
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun DebugScreen(
-    authState: AuthState,
-    onForceAuth: () -> Unit,
-    onForceMain: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "🔍 Debug Screen",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
+fun PermissionHandler() {
+    val permissionsState = rememberMultiplePermissionsState(
+        permissions = listOf(
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO,
+            Manifest.permission.READ_MEDIA_AUDIO
         )
+    )
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "Current Auth State:",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = when (authState) {
-                        is AuthState.Loading -> "⏳ Loading..."
-                        is AuthState.Unauthenticated -> "❌ Not authenticated"
-                        is AuthState.Authenticated -> "✅ Authenticated: ${authState.user.email}"
-                        is AuthState.Error -> "🚨 Error: ${authState.message}"
-                    },
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Column(
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Button(
-                onClick = onForceAuth,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("🔑 Show Auth Screen")
-            }
-
-            Button(
-                onClick = onForceMain,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("🏠 Show Main Screen")
-            }
+    if (!permissionsState.allPermissionsGranted) {
+        LaunchedEffect(Unit) {
+            permissionsState.launchMultiplePermissionRequest()
         }
     }
 }

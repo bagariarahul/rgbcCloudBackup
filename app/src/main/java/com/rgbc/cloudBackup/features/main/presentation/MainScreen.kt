@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Upload
@@ -27,6 +28,8 @@ import timber.log.Timber
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
+    onNavigateToAuth: () -> Unit = {},
+    onNavigateToDirectories: () -> Unit = {}, // Add this parameter
     modifier: Modifier = Modifier,
     viewModel: MainViewModel = hiltViewModel()
 ) {
@@ -55,6 +58,43 @@ fun MainScreen(
             ScanProgressCard(progress = progress)
             Spacer(modifier = Modifier.height(16.dp))
         }
+
+        // Directory Management Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "📁 Directory Backup",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = "Select folders to backup automatically",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = onNavigateToDirectories, // Now this parameter exists
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.FolderOpen, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Manage Directories")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Action Buttons Row
         Row(
@@ -86,10 +126,11 @@ fun MainScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Add Test File")
             }
-            // Add this after the Upload button
-
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Test Download Button
         Button(
             onClick = { viewModel.testDownloadFile() },
             enabled = !uiState.isScanning,
@@ -100,9 +141,9 @@ fun MainScreen(
             Text("Test Download")
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Upload Test Button full width
+        // Upload Test Button
         Button(
             onClick = {
                 Timber.i("Test Upload button clicked")
