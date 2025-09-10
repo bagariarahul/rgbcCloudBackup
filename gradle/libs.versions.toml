@@ -24,6 +24,7 @@ dagger = "2.57.1"
 
 # Database
 room = "2.7.2"
+securityCryptoKtx = "1.1.01.0-alpha06"
 sqlcipher = "4.5.4"
 sqlite = "2.5.2"
 
@@ -72,6 +73,7 @@ androidx-activity-compose = { group = "androidx.activity", name = "activity-comp
 
 # Compose BOM and UI
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
+androidx-security-crypto-ktx = { module = "androidx.security:security-crypto-ktx", version.ref = "securityCryptoKtx" }
 androidx-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }

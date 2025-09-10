@@ -8,4 +8,10 @@
         <!-- Add your actual IP if using real device -->
         <!-- <domain includeSubdomains="false">192.168.1.100</domain> -->
     </domain-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <!-- Allow HTTPS to Railway domain -->
+        <domain includeSubdomains="true">rgbccloudserver-production.up.railway.app</domain>
+    </domain-config>
+
+
 </network-security-config>
