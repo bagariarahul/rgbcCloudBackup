@@ -163,6 +163,11 @@ dependencies {
     // ADD THESE for Android instrumented tests
     androidTestImplementation(libs.mockito.core)
     androidTestImplementation(libs.mockito.kotlin)
+    implementation(libs.document.file)
+    implementation(libs.accompanist.permissions)
+
+    implementation(libs.androidx.foundation)
+
 
 
 }

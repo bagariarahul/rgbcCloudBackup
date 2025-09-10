@@ -5,10 +5,14 @@ kotlin = "2.2.10"
 core-ktx = "1.17.0"
 lifecycle-runtime-ktx = "2.9.3"
 activity-compose = "1.10.1"
+document-file="1.1.0"
+accompanist-permissions = "0.37.3"
 
 # Compose BOM and Compiler
 compose-bom = "2025.08.01"
 compose-compiler = "1.5.14"
+compose-foundation = "1.9.1"
+
 
 # UI and Navigation
 material3 = "1.3.2"
@@ -70,6 +74,8 @@ androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifec
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle-viewmodel-compose" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle-runtime-compose" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activity-compose" }
+document-file = { group = "androidx.documentfile", name = "documentfile", version.ref = "document-file" }
+accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanist-permissions" }
 
 # Compose BOM and UI
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
@@ -137,6 +143,8 @@ mockito-kotlin = { group = "org.mockito.kotlin", name = "mockito-kotlin", versio
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 androidx-arch-core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "arch-core-testing" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin-test" }
+
+androidx-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "compose-foundation"  }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

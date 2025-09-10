@@ -76,6 +76,7 @@ class AuthManager @Inject constructor(
         }
     }
 
+
     suspend fun register(
         email: String,
         password: String,
@@ -179,6 +180,7 @@ class AuthManager @Inject constructor(
         return encryptedPrefs.getString("access_token", null)
     }
 
+
     private fun saveAuthData(authResponse: AuthResponse) {
         encryptedPrefs.edit().apply {
             putString("access_token", authResponse.tokens.accessToken)
@@ -219,6 +221,7 @@ class AuthManager @Inject constructor(
             .replace(" ", "_")
             .replace("-", "_")
     }
+
 }
 
 sealed class AuthState {

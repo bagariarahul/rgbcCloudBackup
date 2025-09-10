@@ -4,13 +4,12 @@ import android.content.Context
 import androidx.room.Room
 import com.rgbc.cloudBackup.core.data.database.CloudBackupDatabase
 import com.rgbc.cloudBackup.core.data.database.entity.FileIndexDao
+import com.rgbc.cloudBackup.features.directory.data.BackupDirectoryDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import net.sqlcipher.database.SupportFactory
-
 import javax.inject.Singleton
 
 @Module
@@ -19,22 +18,13 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(
-        @ApplicationContext context: Context
-    ): CloudBackupDatabase {
-        // Generate database password (in production, store this securely)
-        val passphrase = getDatabasePassword(context)
-
-        // Create SQLCipher support factory
-        val supportFactory = SupportFactory(passphrase)
-
+    fun provideDatabase(@ApplicationContext context: Context): CloudBackupDatabase {
         return Room.databaseBuilder(
-            context,
+            context.applicationContext,
             CloudBackupDatabase::class.java,
             "cloud_backup_database"
         )
-            .openHelperFactory(supportFactory)  // Use SQLCipher factory
-            .fallbackToDestructiveMigration()
+            .fallbackToDestructiveMigration() // For development - remove in production
             .build()
     }
 
@@ -43,12 +33,8 @@ object DatabaseModule {
         return database.fileIndexDao()
     }
 
-    /**
-     * Generate secure database password
-     * In production, you should use Android Keystore
-     */
-    private fun getDatabasePassword(context: Context): ByteArray {
-        val basePassword = "CloudBackup_${context.packageName}"
-        return basePassword.toByteArray()
+    @Provides
+    fun provideBackupDirectoryDao(database: CloudBackupDatabase): BackupDirectoryDao {
+        return database.backupDirectoryDao()
     }
 }
