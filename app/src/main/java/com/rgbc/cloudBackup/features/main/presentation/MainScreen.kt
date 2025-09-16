@@ -24,6 +24,14 @@ import com.rgbc.cloudBackup.features.main.presentation.components.FileItem
 import com.rgbc.cloudBackup.features.main.presentation.components.ScanProgressCard
 import com.rgbc.cloudBackup.features.main.presentation.components.StatisticsCard
 import timber.log.Timber
+import androidx.lifecycle.Lifecycle
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.time.delay
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,6 +44,43 @@ fun MainScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle(initialValue = MainUiState())
     val allFiles by viewModel.allFiles.collectAsStateWithLifecycle(initialValue = emptyList())
     val filesToBackup by viewModel.filesToBackup.collectAsStateWithLifecycle(initialValue = emptyList())
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(10_000) // 10 seconds
+            try {
+                viewModel.triggerExternalRefresh("background_sync")
+            } catch (e: Exception) {
+                Timber.e(e, "Background refresh failed")
+            }
+        }
+    }
+
+// In MainScreen.kt, REPLACE the existing DisposableEffect with this:
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    Timber.d("🔄 MainScreen resumed, force refreshing file status")
+                    viewModel.refreshData()
+                }
+                Lifecycle.Event.ON_START -> {
+                    Timber.d("🔄 MainScreen started, refreshing data")
+                    viewModel.refreshData()
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+
+
 
     Timber.d("MainScreen composed with ${allFiles.size} files and scanningState = ${uiState.isScanning}")
 
@@ -113,56 +158,18 @@ fun MainScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Refresh")
             }
-
-            Button(
-                onClick = {
-                    Timber.i("Add Test File button clicked")
-                    viewModel.addTestFile()
-                },
-                enabled = !uiState.isScanning,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Test File")
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Add Test File")
-            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Test Download Button
-        Button(
-            onClick = { viewModel.testDownloadFile() },
-            enabled = !uiState.isScanning,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.LockOpen, contentDescription = "Test Download")
-            Spacer(Modifier.width(8.dp))
-            Text("Test Download")
-        }
-
         Spacer(modifier = Modifier.height(8.dp))
-
-        // Upload Test Button
-        Button(
-            onClick = {
-                Timber.i("Test Upload button clicked")
-                viewModel.testUploadFile()
-            },
-            enabled = !uiState.isScanning,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.Upload, contentDescription = "Test Upload")
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Test Upload")
-        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Display errors if present
         uiState.errorMessage?.let { message ->
             Timber.w("Error displayed: $message")
-            ErrorCard(errorMessage = message, onDismiss = viewModel::clearError)
+//            ErrorCard(errorMessage = message, onDismiss = viewModel::clearError)
             Spacer(modifier = Modifier.height(16.dp))
         }
 

@@ -15,6 +15,7 @@ import com.rgbc.cloudBackup.core.domain.usecase.UploadProgress
 import com.rgbc.cloudBackup.features.directory.data.BackupDirectoryEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +26,12 @@ import java.io.File
 import java.util.Date
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.plus
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
 
 @HiltViewModel
 class DirectoryViewModel @Inject constructor(
@@ -37,7 +44,7 @@ class DirectoryViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(DirectoryUiState())
     val uiState: StateFlow<DirectoryUiState> = _uiState.asStateFlow()
-
+    private val _persistedScanResults = MutableStateFlow<ScanResults?>(null)
     private val _directories = MutableStateFlow<List<BackupDirectoryEntity>>(emptyList())
     val directories: StateFlow<List<BackupDirectoryEntity>> = _directories.asStateFlow()
 
@@ -122,64 +129,119 @@ class DirectoryViewModel @Inject constructor(
         }
     }
 
-    fun scanDirectory(directory: BackupDirectoryEntity) {
+    fun scanDirectory(directoryId: String) {
         viewModelScope.launch {
             try {
-                _uiState.value = _uiState.value.copy(
-                    scanningDirectoryId = directory.id,
-                    error = null
-                )
-
-                val uri = Uri.parse(directory.uri)
-
-                // Verify and restore permission if needed
-                if (!hasTreeUriPermission(uri)) {
-                    try {
-                        context.contentResolver.takePersistableUriPermission(
-                            uri,
-                            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                        )
-                        Timber.d("🔄 Retook permission for directory scan")
-                    } catch (e: Exception) {
-                        _uiState.value = _uiState.value.copy(
-                            scanningDirectoryId = null,
-                            error = "❌ Permission denied: ${directory.displayName}. Please re-add directory."
-                        )
-                        return@launch
-                    }
-                }
-
-                val documentFile = DocumentFile.fromTreeUri(context, uri)
-
-                if (documentFile?.exists() == true && documentFile.canRead()) {
-                    val allFiles = scanDirectoryRecursively(documentFile)
-                    val newFiles = filterNewFiles(allFiles)
-
-                    _uiState.value = _uiState.value.copy(
-                        scanningDirectoryId = null,
-                        scanResults = ScanResults(
-                            newFiles = newFiles,
-                            totalSize = newFiles.sumOf { it.size },
-                            directoryScanned = directory.displayName,
-                            lastScanTime = System.currentTimeMillis()
-                        )
-                    )
-
-                    Timber.d("📊 Scanned ${directory.displayName}: ${allFiles.size} total, ${newFiles.size} new")
+                val directory = _directories.value.find { it.id == directoryId }
+                if (directory != null) {
+                    scanDirectory(directory) // Call the main function
                 } else {
                     _uiState.value = _uiState.value.copy(
-                        scanningDirectoryId = null,
-                        error = "❌ Directory no longer accessible: ${directory.displayName}. Please re-add directory."
+                        error = "Directory not found: $directoryId"
                     )
                 }
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    scanningDirectoryId = null,
-                    error = "❌ Scan failed: ${e.message}"
-                )
+                Timber.e(e, "Failed to find directory: $directoryId")
             }
         }
     }
+
+    fun scanDirectory(directoryEntity: BackupDirectoryEntity) {
+        if (_uiState.value.isScanning) {
+            Timber.w("⚠️ Scan already in progress, ignoring new request")
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(
+                    isScanning = true,
+                    scanningDirectoryId = directoryEntity.id,
+                    error = null,
+                    message = null
+                )
+
+                Timber.d("📂 Scanning directory: ${directoryEntity.displayName}")
+
+                // 🔧 FIX: Use the corrected function call
+                val scanResults = scanSingleDirectoryForFiles(directoryEntity)
+
+                // 🔧 FIX: Persist scan results
+                _persistedScanResults.value = scanResults
+
+                _uiState.value = _uiState.value.copy(
+                    isScanning = false,
+                    scanningDirectoryId = null,
+                    scanResults = scanResults,
+                    message = if (scanResults.newFiles.isNotEmpty()) {
+                        "✅ Found ${scanResults.newFiles.size} new files to backup"
+                    } else {
+                        "ℹ️ No new files found"
+                    }
+                )
+
+                Timber.d("✅ Scan completed: ${scanResults.newFiles.size} new files")
+
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isScanning = false,
+                    scanningDirectoryId = null,
+                    error = "Scan failed: ${e.message}"
+                )
+                Timber.e(e, "❌ Directory scan failed")
+            }
+        }
+    }
+
+    // 🆕 ADD: Missing function to scan a single directory
+    private suspend fun scanSingleDirectoryForFiles(directory: BackupDirectoryEntity): ScanResults {
+        return try {
+            val uri = Uri.parse(directory.uri)
+
+            // Verify permission
+            if (!hasTreeUriPermission(uri)) {
+                throw Exception("No permission to access directory")
+            }
+
+            val documentFile = DocumentFile.fromTreeUri(context, uri)
+            if (documentFile?.exists() != true || !documentFile.canRead()) {
+                throw Exception("Directory not accessible")
+            }
+
+            val allFiles = scanDirectoryRecursively(documentFile)
+            val newFiles = filterNewFiles(allFiles)
+
+            ScanResults(
+                newFiles = newFiles,
+                totalSize = newFiles.sumOf { it.size },
+                directoryScanned = directory.displayName,
+                lastScanTime = System.currentTimeMillis()
+            )
+
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to scan directory: ${directory.displayName}")
+            ScanResults() // Return empty results on error
+        }
+    }
+
+
+    fun restoreScanResults() {
+        val persistedResults = _persistedScanResults.value
+        if (persistedResults != null) {
+            Timber.d("🔄 Restoring persisted scan results: ${persistedResults.newFiles.size} files")
+            _uiState.value = _uiState.value.copy(
+                scanResults = persistedResults,
+                message = "📂 Restored ${persistedResults.newFiles.size} files ready for backup"
+            )
+        }
+    }
+
+    // 🆕 ADD: Clear persisted results after successful backup
+    fun clearPersistedResults() {
+        _persistedScanResults.value = null
+        Timber.d("🧹 Cleared persisted scan results")
+    }
+
 
     fun scanAllDirectories() {
         viewModelScope.launch {
@@ -249,62 +311,121 @@ class DirectoryViewModel @Inject constructor(
         }
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     fun backupAllNewFiles() {
-        viewModelScope.launch {
+        // 🔧 CRITICAL FIX: Use GlobalScope so navigation doesn't cancel backup
+        GlobalScope.launch(Dispatchers.IO) {
+            var successCount = 0 // 🔧 FIX: Declare variables at proper scope
+            var failCount = 0    // 🔧 FIX: Declare variables at proper scope
+
             try {
+                // Switch to Main thread for UI updates
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        isScanning = false,
+                        scanningDirectoryId = null,
+                        error = null,
+                        message = null
+                    )
+                }
+
                 val filesToBackup = _uiState.value.scanResults.newFiles
                 if (filesToBackup.isEmpty()) {
-                    _uiState.value = _uiState.value.copy(error = "⚠️ No new files to backup")
+                    withContext(Dispatchers.Main) {
+                        _uiState.value = _uiState.value.copy(error = "⚠️ No new files to backup")
+                    }
                     return@launch
                 }
 
-                Timber.d("🚀 Starting backup of ${filesToBackup.size} files")
+                Timber.d("🚀 Starting backup in GlobalScope - navigation-safe")
 
-                _uiState.value = _uiState.value.copy(
-                    backupProgress = BackupProgress(
-                        isActive = true,
-                        totalFiles = filesToBackup.size,
-                        completedFiles = 0,
-                        currentFile = ""
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        backupProgress = BackupProgress(
+                            isActive = true,
+                            totalFiles = filesToBackup.size,
+                            completedFiles = 0,
+                            currentFile = ""
+                        )
                     )
-                )
-
-                var successCount = 0
-                var failCount = 0
+                }
 
                 filesToBackup.forEachIndexed { index, file ->
                     try {
-                        _uiState.value = _uiState.value.copy(
-                            backupProgress = _uiState.value.backupProgress?.copy(
-                                currentFile = file.name,
-                                completedFiles = index
+                        // Update UI on Main thread
+                        withContext(Dispatchers.Main) {
+                            _uiState.value = _uiState.value.copy(
+                                backupProgress = _uiState.value.backupProgress?.copy(
+                                    currentFile = file.name,
+                                    completedFiles = index
+                                )
                             )
-                        )
+                        }
 
                         Timber.d("📤 Backing up file ${index + 1}/${filesToBackup.size}: ${file.name}")
 
-                        val tempFile = createReliableTempFile(file.path, file.name)
+                        val originalPath = file.path
+                        val tempFile = withContext(Dispatchers.IO) {
+                            createReliableTempFile(originalPath, file.name)
+                        }
 
                         if (tempFile != null) {
-                            val fileIndex = createFileIndex(file, tempFile.absolutePath)
-                            insertFileUseCase(fileIndex)
+                            val fileIndex = FileIndex(
+                                name = file.name,
+                                path = originalPath,
+                                size = file.size,
+                                checksum = generateChecksum(file),
+                                createdAt = Date(),
+                                modifiedAt = Date(file.lastModified),
+                                shouldBackup = true,
+                                isBackedUp = false,
+                                backedUpAt = null,
+                                fileType = getFileExtension(file.name),
+                                mimeType = file.mimeType ?: "application/octet-stream",
+                                lastAttemptedAt = Date(),
+                                errorMessage = null
+                            )
 
-                            // Upload with progress tracking
-                            uploadFileUseCase.execute(fileIndex).collect { uploadProgress ->
-                                when (uploadProgress) {
-                                    is UploadProgress.Completed -> {
-                                        successCount++
-                                        Timber.d("✅ Successfully backed up: ${file.name}")
-                                    }
-                                    is UploadProgress.Failed -> {
-                                        failCount++
-                                        Timber.e("❌ Upload failed: ${uploadProgress.error}")
-                                    }
-                                    else -> { }
+                            // 🔧 CRITICAL: Database operation on IO thread in GlobalScope
+                            val actualFileId = withContext(Dispatchers.IO) {
+                                try {
+                                    insertFileUseCase(fileIndex)
+                                } catch (e: Exception) {
+                                    Timber.e(e, "Database insert failed in GlobalScope")
+                                    -1L // Return invalid ID on error
                                 }
                             }
 
-                            // Clean up temp file
+                            Timber.d("📊 File inserted with actual ID: $actualFileId")
+
+                            if (actualFileId > 0) {
+                                val fileIndexWithRealId = fileIndex.copy(
+                                    id = actualFileId,
+                                    path = tempFile.absolutePath
+                                )
+
+                                // Upload operation
+                                uploadFileUseCase.execute(fileIndexWithRealId).collect { uploadProgress ->
+                                    when (uploadProgress) {
+                                        is UploadProgress.Completed -> {
+                                            successCount++ // 🔧 FIX: Now accessible
+                                            Timber.d("✅ Successfully backed up: ${file.name} with ID: $actualFileId")
+                                        }
+                                        is UploadProgress.Failed -> {
+                                            failCount++ // 🔧 FIX: Now accessible
+                                            Timber.e("❌ Upload failed: ${uploadProgress.error}")
+                                        }
+                                        else -> {
+                                            Timber.v("📤 Upload progress: $uploadProgress")
+                                        }
+                                    }
+                                }
+                            } else {
+                                failCount++
+                                Timber.e("❌ Database insert failed for: ${file.name}")
+                            }
+
                             try {
                                 tempFile.delete()
                             } catch (e: Exception) {
@@ -320,28 +441,49 @@ class DirectoryViewModel @Inject constructor(
                     }
                 }
 
-                // Complete backup
-                _uiState.value = _uiState.value.copy(
-                    backupProgress = BackupProgress(
-                        isActive = false,
-                        totalFiles = filesToBackup.size,
-                        completedFiles = filesToBackup.size,
-                        currentFile = ""
-                    ),
-                    scanResults = _uiState.value.scanResults.copy(newFiles = emptyList()),
-                    message = "✅ Backup completed: $successCount successful, $failCount failed"
-                )
+                // 🔧 FIX: Update UI and clear persisted results in proper scope
+                withContext(Dispatchers.Main) {
+                    _uiState.value = DirectoryUiState(
+                        isLoading = false,
+                        isScanning = false,
+                        scanningDirectoryId = null,
+                        scanResults = ScanResults(),
+                        backupProgress = null,
+                        error = null,
+                        message = "✅ Backup completed: $successCount successful, $failCount failed" // 🔧 FIX: Variables now accessible
+                    )
 
-                Timber.d("🎉 Backup complete: $successCount successful, $failCount failed")
+                    // 🔧 FIX: Clear persisted results after successful backup
+                    clearPersistedResults()
+                }
+
+                Timber.d("🎉 GlobalScope backup complete: $successCount successful, $failCount failed")
 
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    backupProgress = BackupProgress(isActive = false),
-                    error = "❌ Backup failed: ${e.message}"
-                )
+                withContext(Dispatchers.Main) {
+                    _uiState.value = DirectoryUiState(
+                        isLoading = false,
+                        isScanning = false,
+                        scanningDirectoryId = null,
+                        scanResults = ScanResults(),
+                        backupProgress = null,
+                        error = "❌ Backup failed: ${e.message}",
+                        message = null
+                    )
+
+                    // 🔧 FIX: Clear persisted results even on error
+                    clearPersistedResults()
+                }
+                Timber.e(e, "💥 GlobalScope backup failed")
             }
         }
     }
+
+
+
+
+
+
 
     // FIXED: Check tree URI permission instead of individual file URIs
     private fun hasTreeUriPermission(uri: Uri): Boolean {
@@ -414,14 +556,11 @@ class DirectoryViewModel @Inject constructor(
     private fun createReliableTempFile(uriString: String, fileName: String): File? {
         return try {
             val uri = Uri.parse(uriString)
-
-            Timber.d("📁 Creating temp file for: $fileName")
-            Timber.d("🔗 URI: $uriString")
+            Timber.d("📁 Creating temp file from URI: $uriString")
+            Timber.d("🔗 Parsed URI scheme: ${uri.scheme}")
 
             val inputStream = context.contentResolver.openInputStream(uri)
-
             inputStream?.use { input ->
-                // Create temp file with original name for easier debugging
                 val sanitizedFileName = fileName.replace("[^a-zA-Z0-9._-]".toRegex(), "_")
                 val tempFile = File(
                     context.cacheDir,
@@ -431,10 +570,11 @@ class DirectoryViewModel @Inject constructor(
                 tempFile.outputStream().use { output ->
                     val bytescopied = input.copyTo(output)
                     Timber.d("📁 Created temp file: ${tempFile.name} (${bytescopied} bytes)")
+                    Timber.d("🗂️ Temp file path: ${tempFile.absolutePath}")
                 }
 
                 if (tempFile.exists() && tempFile.length() > 0) {
-                    Timber.d("✅ Temp file created successfully: ${tempFile.absolutePath}")
+                    Timber.d("✅ Temp file created successfully")
                     tempFile
                 } else {
                     Timber.w("⚠️ Temp file created but empty or missing")
@@ -450,10 +590,11 @@ class DirectoryViewModel @Inject constructor(
         }
     }
 
+
     private fun createFileIndex(file: FileToBackup, tempPath: String): FileIndex {
         return FileIndex(
             name = file.name,
-            path = tempPath,
+            path = file.path,
             size = file.size,
             checksum = generateChecksum(file),
             createdAt = Date(),

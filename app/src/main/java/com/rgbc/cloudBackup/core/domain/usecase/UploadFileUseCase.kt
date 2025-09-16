@@ -77,6 +77,7 @@ class UploadFileUseCase @Inject constructor(
                         val uploadDuration = System.currentTimeMillis() - startTime
                         auditLogger.logUploadSuccess(safeDisplayName, uploadDuration)
                         emit(UploadProgress.Completed(safeDisplayName))
+                        Timber.d("✅ File marked as backed up with ID: ${fileIndex.id}")
                     } else {
                         throw Exception("Upload failed: ${response.code()}")
                     }
@@ -91,20 +92,55 @@ class UploadFileUseCase @Inject constructor(
 
 
     private fun serializeEncryptedFile(encryptedFile: EncryptedFile): ByteArray {
-        // Simple serialization - in production use proper serialization (JSON/protobuf)
-        val header = """
-            ENCRYPTED_FILE_v1
-            original_name:${encryptedFile.originalFileName}
-            original_size:${encryptedFile.originalSize}
-            algorithm:${encryptedFile.encryptionAlgorithm}
-            timestamp:${encryptedFile.encryptionTimestamp}
-            iv_length:${encryptedFile.encryptedData.iv.size}
-            data_length:${encryptedFile.encryptedData.ciphertext.size}
-            ---
-        """.trimIndent().toByteArray()
+        return try {
+            // 🔧 FIX: Use proper JSON serialization instead of manual parsing
+            val metadata = mapOf(
+                "version" to "1.0",
+                "originalFileName" to encryptedFile.originalFileName,
+                "originalSize" to encryptedFile.originalSize,
+                "algorithm" to encryptedFile.encryptionAlgorithm,
+                "timestamp" to encryptedFile.encryptionTimestamp,
+                "ivLength" to encryptedFile.encryptedData.iv.size,
+                "dataLength" to encryptedFile.encryptedData.ciphertext.size
+            )
 
-        return header + encryptedFile.encryptedData.iv + encryptedFile.encryptedData.ciphertext
+            // Convert metadata to JSON string
+            val gson = com.google.gson.Gson()
+            val metadataJson = gson.toJson(metadata)
+            val metadataBytes = metadataJson.toByteArray(Charsets.UTF_8)
+
+            // Create header with fixed size
+            val headerSize = metadataBytes.size
+            val headerSizeBytes = ByteArray(4)
+            headerSizeBytes[0] = (headerSize shr 24).toByte()
+            headerSizeBytes[1] = (headerSize shr 16).toByte()
+            headerSizeBytes[2] = (headerSize shr 8).toByte()
+            headerSizeBytes[3] = headerSize.toByte()
+
+            // Combine: header_size(4) + metadata + iv + ciphertext
+            val result = ByteArray(4 + metadataBytes.size + encryptedFile.encryptedData.iv.size + encryptedFile.encryptedData.ciphertext.size)
+
+            var offset = 0
+            System.arraycopy(headerSizeBytes, 0, result, offset, 4)
+            offset += 4
+
+            System.arraycopy(metadataBytes, 0, result, offset, metadataBytes.size)
+            offset += metadataBytes.size
+
+            System.arraycopy(encryptedFile.encryptedData.iv, 0, result, offset, encryptedFile.encryptedData.iv.size)
+            offset += encryptedFile.encryptedData.iv.size
+
+            System.arraycopy(encryptedFile.encryptedData.ciphertext, 0, result, offset, encryptedFile.encryptedData.ciphertext.size)
+
+            Timber.d("✅ File serialized successfully: ${result.size} bytes")
+            result
+
+        } catch (e: Exception) {
+            Timber.e(e, "❌ File serialization failed")
+            throw Exception("Serialization failed: ${e.message}")
+        }
     }
+
 }
 sealed class UploadProgress {
     data class Starting(val safeFileName: String) : UploadProgress()

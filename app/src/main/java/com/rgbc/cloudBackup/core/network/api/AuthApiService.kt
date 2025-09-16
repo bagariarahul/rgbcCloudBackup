@@ -53,9 +53,10 @@ data class LogoutRequest(
 data class AuthResponse(
     val message: String,
     val user: UserData,
-    val device: DeviceData,
-    val tokens: TokenData,
-    val sessionId: String
+    val tokens: TokenData,      // ← Check this structure
+    val sessionId: String,      // ← Should be at top level
+//    val session: SessionData?,
+    val device: DeviceData?
 )
 
 data class UserData(

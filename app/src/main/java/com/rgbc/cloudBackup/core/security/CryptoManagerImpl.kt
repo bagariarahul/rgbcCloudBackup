@@ -230,64 +230,67 @@ data class EncryptedFile(
 ) {
     companion object {
         fun fromSerialized(serializedData: ByteArray): EncryptedFile {
+            return try {
+                Timber.d("🔧 Starting file deserialization: ${serializedData.size} bytes")
 
-            val separatorBytes = "---".toByteArray(Charsets.UTF_8)
-            var separatorIndex = -1
+                if (serializedData.size < 4) {
+                    throw Exception("Invalid file format: too small")
+                }
 
-            for (i in 0..serializedData.size - separatorBytes.size) {
-                var found = true
-                for (j in separatorBytes.indices) {
-                    if (serializedData[i + j] != separatorBytes[j]) {
-                        found = false
-                        break
-                    }
+                // Read header size (first 4 bytes)
+                val headerSize = ((serializedData[0].toInt() and 0xFF) shl 24) or
+                        ((serializedData[1].toInt() and 0xFF) shl 16) or
+                        ((serializedData[2].toInt() and 0xFF) shl 8) or
+                        (serializedData[3].toInt() and 0xFF)
+
+                if (headerSize <= 0 || headerSize > serializedData.size - 4) {
+                    throw Exception("Invalid header size: $headerSize")
                 }
-                if (found) {
-                    separatorIndex = i
-                    break
+
+                // Read metadata JSON
+                val metadataBytes = serializedData.sliceArray(4 until 4 + headerSize)
+                val metadataJson = String(metadataBytes, Charsets.UTF_8)
+
+                val gson = com.google.gson.Gson()
+                val metadata = gson.fromJson(metadataJson, Map::class.java) as Map<String, Any>
+
+                // Extract metadata
+                val originalName = metadata["originalFileName"] as String
+                val originalSize = (metadata["originalSize"] as Double).toLong()
+                val algorithm = metadata["algorithm"] as String
+                val timestamp = (metadata["timestamp"] as Double).toLong()
+                val ivLength = (metadata["ivLength"] as Double).toInt()
+                val dataLength = (metadata["dataLength"] as Double).toInt()
+
+                // Validate sizes
+                val expectedTotalSize = 4 + headerSize + ivLength + dataLength
+                if (serializedData.size != expectedTotalSize) {
+                    throw Exception("Size mismatch: expected $expectedTotalSize, got ${serializedData.size}")
                 }
+
+                // Extract IV and ciphertext
+                var offset = 4 + headerSize
+                val iv = serializedData.sliceArray(offset until offset + ivLength)
+                offset += ivLength
+                val ciphertext = serializedData.sliceArray(offset until offset + dataLength)
+
+                Timber.d("✅ File deserialized successfully: $originalName, $originalSize bytes")
+
+                EncryptedFile(
+                    originalFileName = originalName,
+                    originalSize = originalSize,
+                    encryptedData = EncryptedData(ciphertext, iv),
+                    encryptionAlgorithm = algorithm,
+                    encryptionTimestamp = timestamp
+                )
+
+            } catch (e: Exception) {
+                Timber.e(e, "❌ File deserialization failed")
+                throw Exception("Deserialization failed: ${e.message}")
             }
-
-            if (separatorIndex == -1) throw Exception("Invalid encrypted file format - no separator found")
-
-            // Extract header and binary data
-            val headerBytes = serializedData.sliceArray(0 until separatorIndex)
-            val header = String(headerBytes, Charsets.UTF_8).trim()
-            val binaryData = serializedData.sliceArray(separatorIndex + separatorBytes.size until serializedData.size)
-
-            // Parse header
-            val headerLines = header.lines()
-            var originalName = ""
-            var originalSize = 0L
-            var algorithm = ""
-            var timestamp = 0L
-            var ivLength = 0
-            var dataLength = 0
-
-            headerLines.forEach { line ->
-                when {
-                    line.startsWith("original_name:") -> originalName = line.substringAfter(":")
-                    line.startsWith("original_size:") -> originalSize = line.substringAfter(":").toLong()
-                    line.startsWith("algorithm:") -> algorithm = line.substringAfter(":")
-                    line.startsWith("timestamp:") -> timestamp = line.substringAfter(":").toLong()
-                    line.startsWith("iv_length:") -> ivLength = line.substringAfter(":").toInt()
-                    line.startsWith("data_length:") -> dataLength = line.substringAfter(":").toInt()
-                }
-            }
-
-            // Extract IV and ciphertext from binary data
-            val iv = binaryData.sliceArray(0 until ivLength)
-            val ciphertext = binaryData.sliceArray(ivLength until ivLength + dataLength)
-
-            return EncryptedFile(
-                originalFileName = originalName,
-                originalSize = originalSize,
-                encryptedData = EncryptedData(ciphertext, iv),
-                encryptionAlgorithm = algorithm,
-                encryptionTimestamp = timestamp
-            )
         }
     }
+
 }
 
 sealed class EncryptedFileResult {

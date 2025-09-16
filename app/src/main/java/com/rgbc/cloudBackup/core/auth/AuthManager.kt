@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import timber.log.Timber
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -217,9 +218,13 @@ class AuthManager @Inject constructor(
     }
 
     private fun generateDeviceId(): String {
-        return "${android.os.Build.BRAND}_${android.os.Build.MODEL}_${System.currentTimeMillis()}"
-            .replace(" ", "_")
-            .replace("-", "_")
+        return UUID.randomUUID().toString()
+//        return "${android.os.Build.BRAND}_${android.os.Build.MODEL}_${System.currentTimeMillis()}"
+//            .replace(" ", "_")
+//            .replace("-", "_")
+//        val deviceInfo = "${android.os.Build.BRAND}_${android.os.Build.MODEL}_${android.os.Build.SERIAL}"
+//        return java.util.UUID.nameUUIDFromBytes(deviceInfo.toByteArray()).toString()
+
     }
 
 }

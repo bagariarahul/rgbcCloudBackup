@@ -38,6 +38,16 @@ import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+//import androidx.compose.ui.text.style.TextOverflow
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +59,11 @@ fun DirectorySelectionScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val directories by viewModel.directories.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        // 🆕 ADD: Restore scan results if they exist
+        viewModel.restoreScanResults()
+    }
 
     // Directory picker launcher
     val directoryPickerLauncher = rememberLauncherForActivityResult(
@@ -225,52 +240,130 @@ fun DirectorySelectionScreen(
 
         // Backup Progress (if active)
         AnimatedVisibility(visible = uiState.backupProgress?.isActive == true) {
+            // 🆕 ENHANCED: Better backup progress display
             uiState.backupProgress?.let { progress ->
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp)
                     ) {
+                        // Header with status
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Backing up files...",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Animated progress icon
+                                if (progress.isActive) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 3.dp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "Complete",
+                                        modifier = Modifier.size(24.dp),
+                                        tint = Color.Green
+                                    )
+                                }
+
+                                Text(
+                                    text = if (progress.isActive) "Backing up files..." else "Backup Complete",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            // Progress fraction
                             Text(
                                 text = "${progress.completedFiles}/${progress.totalFiles}",
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
 
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Current file being processed
                         if (progress.currentFile.isNotEmpty()) {
                             Text(
                                 text = "Current: ${progress.currentFile}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        // Progress bar
+                        Column {
+                            LinearProgressIndicator(
+                                progress = if (progress.totalFiles > 0) {
+                                    progress.completedFiles.toFloat() / progress.totalFiles.toFloat()
+                                } else 0f,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
 
-                        LinearProgressIndicator(
-                            progress = progress.progressPercent,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            // Percentage
+                            val percentage = if (progress.totalFiles > 0) {
+                                ((progress.completedFiles.toFloat() / progress.totalFiles.toFloat()) * 100).toInt()
+                            } else 0
+
+                            Text(
+                                text = "$percentage% complete",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        // Time estimate (if active)
+                        if (progress.isActive && progress.completedFiles > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Text(
+                                    text = "⚡ Speed: ~${progress.completedFiles}/min",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                val remaining = progress.totalFiles - progress.completedFiles
+                                if (remaining > 0) {
+                                    Text(
+                                        text = "⏱️ ${remaining} files remaining",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
             }
+
         }
 
         // Directories List
@@ -330,7 +423,7 @@ fun DirectorySelectionScreen(
                             directory = directory,
                             isScanning = uiState.scanningDirectoryId == directory.id,
                             onRemove = { viewModel.removeDirectory(it) },
-                            onScan = { viewModel.scanDirectory(it) }
+                            onScan = { directory -> viewModel.scanDirectory(directory) }
                         )
                     }
 

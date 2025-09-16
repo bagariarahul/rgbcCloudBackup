@@ -65,7 +65,9 @@ object NetworkModule {
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl("https://rgbccloudserver-production.up.railway.app/")
+//            .baseUrl("https://rgbccloudserver-production.up.railway.app/")
+//            .baseUrl("http://192.168.1.48:3000/")
+            .baseUrl("http://10.0.2.2:3000/")
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

@@ -45,13 +45,13 @@ class FileRepositoryImpl @Inject constructor(
 
     override suspend fun insertFile(file: FileIndex): Long {
         return try {
-            Timber.d("Inserting file: ${file.name}")
-            val result = fileDao.insertFile(file)
-            Timber.d("Successfully inserted file with ID: $result")
-            result
+            Timber.d("📥 Inserting file: ${file.name}")
+            val actualId = fileDao.insertFile(file)
+            Timber.d("✅ File inserted with database ID: $actualId")
+            actualId
         } catch (e: Exception) {
-            Timber.e(e, "Error inserting file: ${file.name}")
-            0L
+            Timber.e(e, "❌ Error inserting file: ${file.name}")
+            0L // Return 0 on error
         }
     }
 
@@ -75,12 +75,23 @@ class FileRepositoryImpl @Inject constructor(
 
     override suspend fun markAsBackedUp(fileId: Long) {
         try {
+            Timber.d("🔄 Marking file ID $fileId as backed up")
+
+            if (fileId <= 0) {
+                Timber.e("❌ Invalid file ID: $fileId - cannot mark as backed up")
+                return
+            }
+
             fileDao.markAsBackedUp(fileId, Date())
-            Timber.d("Marked file $fileId as backed up")
+            Timber.d("✅ File ID $fileId marked as backed up successfully")
+
         } catch (e: Exception) {
-            Timber.e(e, "Error marking file as backed up: $fileId")
+            Timber.e(e, "❌ Failed to mark file $fileId as backed up")
+            throw e
         }
     }
+
+
 
     override suspend fun findByPath(path: String): FileIndex? {
         return try {

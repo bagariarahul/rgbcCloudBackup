@@ -67,6 +67,10 @@ interface FileIndexDao {
     @Query("SELECT COUNT(*) FROM file_index WHERE isBackedUp = 0 AND lastAttemptedAt IS NOT NULL")
     suspend fun countFailedBackups(): Int
 
+    @Query("SELECT * FROM file_index WHERE id = :id")
+    suspend fun findById(id: Long): FileIndex?
+
+
 
 }
 

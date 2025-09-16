@@ -1,5 +1,6 @@
 package com.rgbc.cloudBackup.core.network.api
 
+import com.rgbc.cloudBackup.core.domain.usecase.FileListResponse
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
 import retrofit2.Response
@@ -21,7 +22,7 @@ interface BackupApiService {
     ): Response<FileUploadResponse>
 
     @GET("download")
-    suspend fun downloadFile(
+    suspend fun downloadFile_test(
         @Query("user") user: String,
         @Query("file") fileId: String
     ): Response<ResponseBody>
@@ -33,6 +34,52 @@ interface BackupApiService {
     suspend fun deleteFile(
         @Path("fileId") fileId: String
     ): Response<Unit>
+
+
+    @GET("files/{userId}")
+    suspend fun getUserFiles(
+        @Path("userId") userId: String
+    ): Response<UserFilesResponse>
+
+    // 🆕 ADD: Get detailed file info
+    @GET("files/{userId}/{fileName}")
+    suspend fun getFileInfo(
+        @Path("userId") userId: String,
+        @Path("fileName") fileName: String
+    ): Response<ServerFileInfo>
+
+    // 🆕 ADD: Check server file integrity
+    @GET("files/{userId}/{fileName}/integrity")
+    suspend fun checkFileIntegrity(
+        @Path("userId") userId: String,
+        @Path("fileName") fileName: String
+    ): Response<FileIntegrityInfo>
+
+    // ADD TO YOUR BackupApiService.kt:
+
+
+
+        // Existing method
+        @GET("/download")
+        suspend fun downloadFile(
+            @Query("user") user: String,
+            @Query("file") file: String
+        ): Response<ResponseBody>
+
+        // NEW: Add this method for file ID-based downloads
+        @GET("/api/files/download/{fileId}")
+        suspend fun downloadFileById(
+            @Path("fileId") fileId: String
+        ): Response<ResponseBody>
+
+        // NEW: Add this method to list files
+        @GET("/api/files/list")
+        suspend fun listFiles(
+            @Query("limit") limit: Int = 50,
+            @Query("offset") offset: Int = 0
+        ): Response<FileListResponse>
+
+
 }
 
 // Data classes for API responses
@@ -50,3 +97,34 @@ data class FileMetadata(
     val uploadDate: String,
     val checksum: String
 )
+
+// 🆕 ADD: Response models for server sync
+data class UserFilesResponse(
+    val success: Boolean,
+    val files: List<ServerFileInfo>,
+    val totalFiles: Int,
+    val totalSize: Long
+)
+
+data class ServerFileInfo(
+    val fileName: String,
+    val originalName: String,
+    val fileSize: Long,
+    val encryptedSize: Long,
+    val uploadedAt: String,
+    val checksum: String?,
+    val contentType: String?,
+    val isCorrupted: Boolean = false,
+    val lastModified: String
+)
+
+data class FileIntegrityInfo(
+    val fileName: String,
+    val isValid: Boolean,
+    val expectedSize: Long,
+    val actualSize: Long,
+    val checksumMatch: Boolean,
+    val canDecrypt: Boolean,
+    val errorDetails: String?
+)
+
