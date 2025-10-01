@@ -5,7 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import com.rgbc.cloudBackup.features.directory.data.BackupDirectoryDao
-import com.rgbc.cloudBackup.features.directory.data.BackupDirectoryEntity
+import com.rgbc.cloudBackup.features.directory.data.BackupDirectory  // FIXED: Use BackupDirectory instead of BackupDirectoryEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -19,7 +19,7 @@ class PersistentDirectoryRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    suspend fun addDirectory(uri: Uri): Result<BackupDirectoryEntity> {
+    suspend fun addDirectory(uri: Uri): Result<BackupDirectory> {  // FIXED: Return type
         return try {
             val uriString = uri.toString()
 
@@ -35,7 +35,7 @@ class PersistentDirectoryRepository @Inject constructor(
             )
 
             val documentFile = DocumentFile.fromTreeUri(context, uri)
-            val directory = BackupDirectoryEntity(
+            val directory = BackupDirectory(  // FIXED: Use BackupDirectory
                 uri = uriString,
                 displayName = documentFile?.name ?: "Unknown Directory",
                 path = getDisplayPath(uri)
@@ -51,7 +51,7 @@ class PersistentDirectoryRepository @Inject constructor(
         }
     }
 
-    suspend fun restorePersistedDirectories(): List<BackupDirectoryEntity> {
+    suspend fun restorePersistedDirectories(): List<BackupDirectory> {  // FIXED: Return type
         return try {
             Timber.d("🔄 Restoring persisted directories...")
             val persistedUris = context.contentResolver.persistedUriPermissions
@@ -61,10 +61,10 @@ class PersistentDirectoryRepository @Inject constructor(
             val allDbDirectories = directoryDao.getAllDirectories().first()
             Timber.d("📊 Found ${allDbDirectories.size} directories in database")
 
-            val validDirectories = mutableListOf<BackupDirectoryEntity>()
+            val validDirectories = mutableListOf<BackupDirectory>()  // FIXED: Type
 
             allDbDirectories.forEach { directory ->
-                val uri = Uri.parse(directory.uri)
+                val uri = Uri.parse(directory.uri)  // FIXED: Now uri exists
 
                 // Check if we still have permission
                 val hasPermission = persistedUris.any {
@@ -99,7 +99,7 @@ class PersistentDirectoryRepository @Inject constructor(
                         Timber.d("🔄 Retook permission for: ${directory.displayName}")
                     } catch (e: Exception) {
                         // Only remove if we can't retake permission
-                        directoryDao.deleteByUri(directory.uri)
+                        directoryDao.deleteByUri(directory.uri)  // FIXED: Now deleteByUri exists
                         Timber.w("❌ Removed directory without recoverable permission: ${directory.displayName}")
                     }
                 }
@@ -113,13 +113,13 @@ class PersistentDirectoryRepository @Inject constructor(
         }
     }
 
-    fun getAllDirectories(): Flow<List<BackupDirectoryEntity>> {
+    fun getAllDirectories(): Flow<List<BackupDirectory>> {  // FIXED: Return type matches DAO
         return directoryDao.getAllDirectories()
     }
 
     suspend fun removeDirectory(uri: String) {
         try {
-            directoryDao.deleteByUri(uri)
+            directoryDao.deleteByUri(uri)  // FIXED: Method now exists
             // Release persistent permission
             try {
                 context.contentResolver.releasePersistableUriPermission(

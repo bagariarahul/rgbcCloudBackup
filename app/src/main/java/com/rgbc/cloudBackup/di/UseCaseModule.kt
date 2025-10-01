@@ -21,8 +21,9 @@ object UseCaseModule {
     @Singleton
     fun provideGetBackupStatisticsUseCase(
         fileRepository: FileRepository
-    ): GetBackupStatisticsUseCase =
-        GetBackupStatisticsUseCase(fileRepository)
+    ): GetBackupStatisticsUseCase {
+        return GetBackupStatisticsUseCase(fileRepository)
+    }
 
     @Provides
     @Singleton
@@ -30,16 +31,16 @@ object UseCaseModule {
         apiService: BackupApiService,
         fileRepository: FileRepository,
         auditLogger: SecurityAuditLogger,
-        cryptoManager: CryptoManagerImpl  // ← Add this parameter
-    ): UploadFileUseCase =
-        UploadFileUseCase(apiService, fileRepository, auditLogger, cryptoManager)
+        cryptoManager: CryptoManagerImpl
+    ): UploadFileUseCase {
+        return UploadFileUseCase(apiService,auditLogger)
+    }
 
     @Provides
     @Singleton
     fun provideDownloadFileUseCase(
-        apiService: BackupApiService,
-        auditLogger: SecurityAuditLogger,
-        cryptoManager: CryptoManagerImpl
-    ): DownloadFileUseCase =
-        DownloadFileUseCase(apiService, auditLogger,cryptoManager)
+        apiService: BackupApiService
+    ): DownloadFileUseCase {
+        return DownloadFileUseCase(apiService)
+    }
 }

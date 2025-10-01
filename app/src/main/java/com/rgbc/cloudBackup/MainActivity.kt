@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,17 +36,24 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.rgbc.cloudBackup.core.navigation.Screen
 import com.rgbc.cloudBackup.core.navigation.bottomNavItems
+import com.rgbc.cloudBackup.features.directory.presentation.DirectoryViewModel
 import com.rgbc.cloudBackup.features.files.presentation.FilesScreen
+import com.rgbc.cloudBackup.features.main.presentation.MainViewModel
 import com.rgbc.cloudBackup.features.settings.presentation.SettingsScreen
-import com.rgbc.cloudBackup.features.sync.presentation.ServerSyncScreen
+//import com.rgbc.cloudBackup.features.sync.presentation.ServerSyncScreen
 
 
 
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private val mainViewModel: MainViewModel by viewModels()
+    private val directoryViewModel: DirectoryViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        directoryViewModel.setMainViewModelReference(mainViewModel)
 
         // Initialize Timber for logging
         if (BuildConfig.DEBUG) {
@@ -148,7 +156,7 @@ fun CloudBackupApp() {
 
                     composable(Screen.ServerSync.route) {
                         Timber.d("🌐 Navigated to Server Sync screen")
-                        ServerSyncScreen()
+//                        ServerSyncScreen()
                     }
 
 

@@ -1,44 +1,38 @@
 package com.rgbc.cloudBackup.core.data.database
 
-import androidx.room.Database
-import androidx.room.Room
-import androidx.room.RoomDatabase
-import androidx.room.TypeConverters
-import android.content.Context
-import com.rgbc.cloudBackup.core.data.database.entity.FileIndex
-import com.rgbc.cloudBackup.core.data.database.entity.FileIndexDao
-import com.rgbc.cloudBackup.features.directory.data.BackupDirectoryEntity
+import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+import com.rgbc.cloudBackup.core.data.database.entity.*
+import com.rgbc.cloudBackup.features.directory.data.BackupDirectory
 import com.rgbc.cloudBackup.features.directory.data.BackupDirectoryDao
+import java.util.Date
 
 @Database(
     entities = [
         FileIndex::class,
-        BackupDirectoryEntity::class
+        BackupDirectory::class  // ADD: Directory entity
     ],
-    version = 2, // Increment version for new entity
-    exportSchema = false
+    version = 5, // Keep your current version
+    exportSchema = false // Set to false for now to avoid schema conflicts
 )
-@TypeConverters(Converters::class)
+@TypeConverters(DateConverter::class)
 abstract class CloudBackupDatabase : RoomDatabase() {
+
+    // Existing DAOs
     abstract fun fileIndexDao(): FileIndexDao
-    abstract fun backupDirectoryDao(): BackupDirectoryDao // Add this
 
-    companion object {
-        @Volatile
-        private var INSTANCE: CloudBackupDatabase? = null
+    // ADD: Directory DAO
+    abstract fun backupDirectoryDao(): BackupDirectoryDao
 
-        fun getDatabase(context: Context): CloudBackupDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    CloudBackupDatabase::class.java,
-                    "cloud_backup_database"
-                )
-                    .fallbackToDestructiveMigration() // For development
-                    .build()
-                INSTANCE = instance
-                instance
-            }
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            // Add new columns to existing table if needed
+            database.execSQL("ALTER TABLE backup_directories ADD COLUMN uri TEXT DEFAULT ''")
+            database.execSQL("ALTER TABLE backup_directories ADD COLUMN display_name TEXT DEFAULT ''")
+
+            // Create index on URI
+            database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_backup_directories_uri ON backup_directories(uri)")
         }
     }
 }

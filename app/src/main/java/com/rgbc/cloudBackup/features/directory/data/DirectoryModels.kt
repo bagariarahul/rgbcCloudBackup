@@ -1,4 +1,6 @@
-data class BackupDirectory(
+package com.rgbc.cloudBackup.features.directory.data
+
+data class DirectorySelection(
     val id: String,
     val uri: String,
     val displayName: String,

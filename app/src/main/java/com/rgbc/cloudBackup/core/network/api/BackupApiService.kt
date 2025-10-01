@@ -1,130 +1,60 @@
 package com.rgbc.cloudBackup.core.network.api
 
-import com.rgbc.cloudBackup.core.domain.usecase.FileListResponse
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
 import retrofit2.Response
-import retrofit2.http.DELETE
-import retrofit2.http.GET
-import retrofit2.http.Multipart
-import retrofit2.http.POST
-import retrofit2.http.Part
-import retrofit2.http.Path
-import retrofit2.http.Query
+import retrofit2.http.*
 
 interface BackupApiService {
 
+    // File Upload (simplified)
     @Multipart
-    @POST("upload")
+    @POST("api/files/upload")
     suspend fun uploadFile(
-        @Part file: MultipartBody.Part,
-        @Part("metadata") metadata: String
+        @Part file: MultipartBody.Part
     ): Response<FileUploadResponse>
 
-    @GET("download")
-    suspend fun downloadFile_test(
-        @Query("user") user: String,
-        @Query("file") fileId: String
+    // File Download by ID
+    @Streaming
+    @GET("api/files/download/{fileId}")
+    suspend fun downloadFileById(
+        @Path("fileId") fileId: String
     ): Response<ResponseBody>
 
-    @GET("get")
-    suspend fun getFileList(): Response<List<FileMetadata>>
+    // File List
+    @GET("api/files/list")
+    suspend fun getFileList(): Response<FileListResponse>
 
-    @DELETE("delete")
-    suspend fun deleteFile(
-        @Path("fileId") fileId: String
-    ): Response<Unit>
-
-
-    @GET("files/{userId}")
-    suspend fun getUserFiles(
-        @Path("userId") userId: String
-    ): Response<UserFilesResponse>
-
-    // 🆕 ADD: Get detailed file info
-    @GET("files/{userId}/{fileName}")
-    suspend fun getFileInfo(
-        @Path("userId") userId: String,
-        @Path("fileName") fileName: String
-    ): Response<ServerFileInfo>
-
-    // 🆕 ADD: Check server file integrity
-    @GET("files/{userId}/{fileName}/integrity")
-    suspend fun checkFileIntegrity(
-        @Path("userId") userId: String,
-        @Path("fileName") fileName: String
-    ): Response<FileIntegrityInfo>
-
-    // ADD TO YOUR BackupApiService.kt:
-
-
-
-        // Existing method
-        @GET("/download")
-        suspend fun downloadFile(
-            @Query("user") user: String,
-            @Query("file") file: String
-        ): Response<ResponseBody>
-
-        // NEW: Add this method for file ID-based downloads
-        @GET("/api/files/download/{fileId}")
-        suspend fun downloadFileById(
-            @Path("fileId") fileId: String
-        ): Response<ResponseBody>
-
-        // NEW: Add this method to list files
-        @GET("/api/files/list")
-        suspend fun listFiles(
-            @Query("limit") limit: Int = 50,
-            @Query("offset") offset: Int = 0
-        ): Response<FileListResponse>
-
-
+    // Legacy endpoints for backward compatibility
+    @GET("download")
+    suspend fun downloadFile(
+        @Query("user") user: String,
+        @Query("file") file: String
+    ): Response<ResponseBody>
 }
 
-// Data classes for API responses
-
+// Response data classes
 data class FileUploadResponse(
-    val fileId: String,
-    val uploadUrl: String,
-    val status: String
+    val message: String,
+    val file: UploadedFile
 )
 
-data class FileMetadata(
-    val fileId: String,
-    val fileName: String,
-    val fileSize: Long,
-    val uploadDate: String,
-    val checksum: String
+data class UploadedFile(
+    val id: Long,
+    val originalName: String,
+    val filename: String,
+    val size: Long,
+    val uploadedAt: String
 )
 
-// 🆕 ADD: Response models for server sync
-data class UserFilesResponse(
-    val success: Boolean,
-    val files: List<ServerFileInfo>,
-    val totalFiles: Int,
-    val totalSize: Long
+data class FileListResponse(
+    val files: List<RemoteFile>,
+    val total: Int
 )
 
-data class ServerFileInfo(
-    val fileName: String,
+data class RemoteFile(
+    val id: Int,
     val originalName: String,
     val fileSize: Long,
-    val encryptedSize: Long,
-    val uploadedAt: String,
-    val checksum: String?,
-    val contentType: String?,
-    val isCorrupted: Boolean = false,
-    val lastModified: String
+    val uploadedAt: String
 )
-
-data class FileIntegrityInfo(
-    val fileName: String,
-    val isValid: Boolean,
-    val expectedSize: Long,
-    val actualSize: Long,
-    val checksumMatch: Boolean,
-    val canDecrypt: Boolean,
-    val errorDetails: String?
-)
-

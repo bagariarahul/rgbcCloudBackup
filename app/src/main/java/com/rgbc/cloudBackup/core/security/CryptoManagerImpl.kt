@@ -19,11 +19,11 @@ import javax.inject.Singleton
 
 @Singleton
 class CryptoManagerImpl @Inject constructor(
-    @ApplicationContext  private val context: Context,
+    @ApplicationContext private val context: Context,
     private val auditLogger: SecurityAuditLogger
 ) : CryptoManager {
 
-    private val keyAlias = "CloudBackupMasterKey"
+    private val keyAlias = "CloudBackup_MasterKey"
     private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
     companion object {
@@ -41,6 +41,7 @@ class CryptoManagerImpl @Inject constructor(
             val cipher = Cipher.getInstance(TRANSFORMATION)
             val secretKey = getOrCreateKey()
             cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+
             val ciphertext = cipher.doFinal(plaintext)
             val iv = cipher.iv
 
@@ -61,8 +62,8 @@ class CryptoManagerImpl @Inject constructor(
             val secretKey = getOrCreateKey()
             val spec = GCMParameterSpec(GCM_TAG_LENGTH * 8, encryptedData.iv)
             cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
-            val plaintext = cipher.doFinal(encryptedData.ciphertext)
 
+            val plaintext = cipher.doFinal(encryptedData.ciphertext)
             Timber.d("Data decrypted successfully, size: ${plaintext.size} bytes")
             plaintext
         } catch (e: Exception) {
@@ -96,7 +97,6 @@ class CryptoManagerImpl @Inject constructor(
             val masterKey = MasterKey.Builder(context)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
                 .build()
-
             EncryptedSharedPreferences.create(
                 context,
                 fileName,
@@ -119,7 +119,7 @@ class CryptoManagerImpl @Inject constructor(
             val safeFileName = "File_${inputFile.name.hashCode().toString().takeLast(8)}"
 
             auditLogger.logEncryptionStart(safeFileName, inputFile.length())
-            Timber.i("Starting file encryption for: $safeFileName")
+            Timber.i("Starting file encryption for $safeFileName")
 
             // Read original file
             val plaintext = inputFile.readBytes()
@@ -140,11 +140,10 @@ class CryptoManagerImpl @Inject constructor(
             auditLogger.logEncryptionSuccess(safeFileName, encryptionDuration)
 
             EncryptedFileResult.Success(encryptedFile)
-
         } catch (e: Exception) {
             val safeFileName = "File_${inputFile.name.hashCode().toString().takeLast(8)}"
             auditLogger.logEncryptionFailure(safeFileName, e.message ?: "Unknown error")
-            Timber.e(e, "File encryption failed for: $safeFileName")
+            Timber.e(e, "File encryption failed for $safeFileName")
             EncryptedFileResult.Error(e.message ?: "Encryption failed")
         }
     }
@@ -158,7 +157,7 @@ class CryptoManagerImpl @Inject constructor(
             val safeFileName = "File_${encryptedFile.originalFileName.hashCode().toString().takeLast(8)}"
 
             auditLogger.logDecryptionStart(safeFileName, encryptedFile.originalSize)
-            Timber.i("Starting file decryption for: $safeFileName")
+            Timber.i("Starting file decryption for $safeFileName")
 
             // Decrypt the data
             val decryptedData = decryptData(encryptedFile.encryptedData)
@@ -175,11 +174,10 @@ class CryptoManagerImpl @Inject constructor(
             auditLogger.logDecryptionSuccess(safeFileName, decryptionDuration)
 
             DecryptedFileResult.Success(outputFile.absolutePath)
-
         } catch (e: Exception) {
             val safeFileName = "File_${encryptedFile.originalFileName.hashCode().toString().takeLast(8)}"
             auditLogger.logDecryptionFailure(safeFileName, e.message ?: "Unknown error")
-            Timber.e(e, "File decryption failed for: $safeFileName")
+            Timber.e(e, "File decryption failed for $safeFileName")
             DecryptedFileResult.Error(e.message ?: "Decryption failed")
         }
     }
@@ -213,6 +211,7 @@ class CryptoManagerImpl @Inject constructor(
 
         keyGenerator.init(keyGenParameterSpec)
         val secretKey = keyGenerator.generateKey()
+
         Timber.d("New encryption key generated and stored in Android Keystore")
         return secretKey
     }
@@ -231,16 +230,16 @@ data class EncryptedFile(
     companion object {
         fun fromSerialized(serializedData: ByteArray): EncryptedFile {
             return try {
-                Timber.d("🔧 Starting file deserialization: ${serializedData.size} bytes")
+                Timber.d("Starting file deserialization: ${serializedData.size} bytes")
 
                 if (serializedData.size < 4) {
                     throw Exception("Invalid file format: too small")
                 }
 
                 // Read header size (first 4 bytes)
-                val headerSize = ((serializedData[0].toInt() and 0xFF) shl 24) or
-                        ((serializedData[1].toInt() and 0xFF) shl 16) or
-                        ((serializedData[2].toInt() and 0xFF) shl 8) or
+                val headerSize = (serializedData[0].toInt() and 0xFF shl 24) or
+                        (serializedData[1].toInt() and 0xFF shl 16) or
+                        (serializedData[2].toInt() and 0xFF shl 8) or
                         (serializedData[3].toInt() and 0xFF)
 
                 if (headerSize <= 0 || headerSize > serializedData.size - 4) {
@@ -248,7 +247,7 @@ data class EncryptedFile(
                 }
 
                 // Read metadata JSON
-                val metadataBytes = serializedData.sliceArray(4 until 4 + headerSize)
+                val metadataBytes = serializedData.sliceArray(4 until (4 + headerSize))
                 val metadataJson = String(metadataBytes, Charsets.UTF_8)
 
                 val gson = com.google.gson.Gson()
@@ -270,11 +269,11 @@ data class EncryptedFile(
 
                 // Extract IV and ciphertext
                 var offset = 4 + headerSize
-                val iv = serializedData.sliceArray(offset until offset + ivLength)
+                val iv = serializedData.sliceArray(offset until (offset + ivLength))
                 offset += ivLength
-                val ciphertext = serializedData.sliceArray(offset until offset + dataLength)
+                val ciphertext = serializedData.sliceArray(offset until (offset + dataLength))
 
-                Timber.d("✅ File deserialized successfully: $originalName, $originalSize bytes")
+                Timber.d("File deserialized successfully: $originalName, $originalSize bytes")
 
                 EncryptedFile(
                     originalFileName = originalName,
@@ -283,14 +282,60 @@ data class EncryptedFile(
                     encryptionAlgorithm = algorithm,
                     encryptionTimestamp = timestamp
                 )
-
             } catch (e: Exception) {
-                Timber.e(e, "❌ File deserialization failed")
+                Timber.e(e, "File deserialization failed")
                 throw Exception("Deserialization failed: ${e.message}")
             }
         }
     }
 
+    fun serialize(): ByteArray {
+        return try {
+            // Create metadata
+            val metadata = mapOf(
+                "version" to 1.0,
+                "originalFileName" to originalFileName,
+                "originalSize" to originalSize,
+                "algorithm" to encryptionAlgorithm,
+                "timestamp" to encryptionTimestamp,
+                "ivLength" to encryptedData.iv.size,
+                "dataLength" to encryptedData.ciphertext.size
+            )
+
+            // Convert metadata to JSON string
+            val gson = com.google.gson.Gson()
+            val metadataJson = gson.toJson(metadata)
+            val metadataBytes = metadataJson.toByteArray(Charsets.UTF_8)
+
+            // Create header with fixed size
+            val headerSize = metadataBytes.size
+            val headerSizeBytes = ByteArray(4)
+            headerSizeBytes[0] = (headerSize shr 24).toByte()
+            headerSizeBytes[1] = (headerSize shr 16).toByte()
+            headerSizeBytes[2] = (headerSize shr 8).toByte()
+            headerSizeBytes[3] = headerSize.toByte()
+
+            // Combine: header_size(4) + metadata + iv + ciphertext
+            val result = ByteArray(
+                4 + metadataBytes.size + encryptedData.iv.size + encryptedData.ciphertext.size
+            )
+
+            var offset = 0
+            System.arraycopy(headerSizeBytes, 0, result, offset, 4)
+            offset += 4
+            System.arraycopy(metadataBytes, 0, result, offset, metadataBytes.size)
+            offset += metadataBytes.size
+            System.arraycopy(encryptedData.iv, 0, result, offset, encryptedData.iv.size)
+            offset += encryptedData.iv.size
+            System.arraycopy(encryptedData.ciphertext, 0, result, offset, encryptedData.ciphertext.size)
+
+            Timber.d("File serialized successfully: ${result.size} bytes")
+            result
+        } catch (e: Exception) {
+            Timber.e(e, "File serialization failed")
+            throw Exception("Serialization failed: ${e.message}")
+        }
+    }
 }
 
 sealed class EncryptedFileResult {

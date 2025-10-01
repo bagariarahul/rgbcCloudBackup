@@ -18,6 +18,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
+import java.io.File
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -133,6 +134,7 @@ class AutoBackupService : Service() {
 
             pendingFiles.take(5).forEach { file -> // Limit to 5 files per batch
                 try {
+
                     // Check for duplicates
                     val duplicateCheck = checkDuplicateUseCase(file.path, file.name, file.size)
                     if (duplicateCheck.shouldSkip) {
@@ -141,7 +143,7 @@ class AutoBackupService : Service() {
                     }
 
                     // Perform upload
-                    uploadFileUseCase.execute(file).collect { progress ->
+                    uploadFileUseCase.execute(File(file.path)).collect { progress ->
                         when (progress) {
                             is UploadProgress.Completed -> {
                                 successCount++

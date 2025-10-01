@@ -45,12 +45,12 @@ class FileRepositoryImpl @Inject constructor(
 
     override suspend fun insertFile(file: FileIndex): Long {
         return try {
-            Timber.d("📥 Inserting file: ${file.name}")
+            Timber.d("Inserting file: ${file.name}")
             val actualId = fileDao.insertFile(file)
-            Timber.d("✅ File inserted with database ID: $actualId")
+            Timber.d("File inserted with database ID: $actualId")
             actualId
         } catch (e: Exception) {
-            Timber.e(e, "❌ Error inserting file: ${file.name}")
+            Timber.e(e, "Error inserting file: ${file.name}")
             0L // Return 0 on error
         }
     }
@@ -75,23 +75,33 @@ class FileRepositoryImpl @Inject constructor(
 
     override suspend fun markAsBackedUp(fileId: Long) {
         try {
-            Timber.d("🔄 Marking file ID $fileId as backed up")
-
+            Timber.d("Marking file ID $fileId as backed up")
             if (fileId <= 0) {
-                Timber.e("❌ Invalid file ID: $fileId - cannot mark as backed up")
+                Timber.e("Invalid file ID $fileId - cannot mark as backed up")
                 return
             }
-
             fileDao.markAsBackedUp(fileId, Date())
-            Timber.d("✅ File ID $fileId marked as backed up successfully")
-
+            Timber.d("File ID $fileId marked as backed up successfully")
         } catch (e: Exception) {
-            Timber.e(e, "❌ Failed to mark file $fileId as backed up")
+            Timber.e(e, "Failed to mark file $fileId as backed up")
             throw e
         }
     }
 
-
+    override suspend fun updateServerFileId(fileId: Long,serverFileId: Long) {
+        try {
+            Timber.d("Setting the server File ID $serverFileId")
+            if (serverFileId <= 0) {
+                Timber.e("Invalid server file ID $serverFileId - cannot mark as backed up")
+                return
+            }
+            fileDao.setServerFileId(fileId, serverFileId)
+            Timber.d("Server File ID $serverFileId updated for File id $fileId")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update Server file id for $fileId")
+            throw e
+        }
+    }
 
     override suspend fun findByPath(path: String): FileIndex? {
         return try {
@@ -130,31 +140,73 @@ class FileRepositoryImpl @Inject constructor(
                 backedUpSize = backedUpSize,
                 pendingFiles = totalFiles - backedUpFiles,
                 errorCount = errorCount,
-                failedFiles = failedFiles   // <--- provide this value
-
-
+                failedFiles = failedFiles
             )
-
             Timber.d("Backup statistics: $stats")
             stats
         } catch (e: Exception) {
             Timber.e(e, "Error getting backup statistics")
-            BackupStats(0, 0, 0L, 0L, 0,0,0)
+            BackupStats(0, 0, 0L, 0L, 0, 0, 0)
         }
     }
 
     override suspend fun clearAllFiles() {
         try {
-            // Note: Room doesn't have a clearAll method in our DAO,
-            // so we'll need to add it or handle it differently
             Timber.i("Clearing all files from database")
-            // For now, we'll leave this as a TODO
-            // fileDao.clearAllFiles()
+            fileDao.clearAllFiles() // Now this method exists
+            Timber.i("Successfully cleared all files from database")
         } catch (e: Exception) {
             Timber.e(e, "Error clearing all files")
+            throw e
         }
     }
 
+    // Additional utility methods for better file management
+    suspend fun clearBackedUpFiles() {
+        try {
+            Timber.i("Clearing backed up files from database")
+            fileDao.clearBackedUpFiles()
+            Timber.i("Successfully cleared backed up files")
+        } catch (e: Exception) {
+            Timber.e(e, "Error clearing backed up files")
+            throw e
+        }
+    }
+
+    suspend fun clearPendingFiles() {
+        try {
+            Timber.i("Clearing pending files from database")
+            fileDao.clearPendingFiles()
+            Timber.i("Successfully cleared pending files")
+        } catch (e: Exception) {
+            Timber.e(e, "Error clearing pending files")
+            throw e
+        }
+    }
+
+    suspend fun clearErrorFiles() {
+        try {
+            Timber.i("Clearing error files from database")
+            fileDao.clearErrorFiles()
+            Timber.i("Successfully cleared error files")
+        } catch (e: Exception) {
+            Timber.e(e, "Error clearing error files")
+            throw e
+        }
+    }
+
+    suspend fun markAsError(fileId: Long, errorMessage: String) {
+        try {
+            Timber.w("Marking file ID $fileId with error: $errorMessage")
+            fileDao.markAsError(fileId, errorMessage, Date())
+            Timber.d("File ID $fileId marked with error successfully")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to mark file $fileId with error")
+            throw e
+        }
+    }
+
+    // Existing methods remain the same...
     override suspend fun getFileCount(): Int {
         return try {
             fileDao.getFileCount()
@@ -163,9 +215,12 @@ class FileRepositoryImpl @Inject constructor(
             0
         }
     }
+
     override suspend fun scanDirectory(path: String): List<FileIndex> {
         val dir = File(path)
-        if (!dir.exists() || !dir.isDirectory) return emptyList()
+        if (!dir.exists() || !dir.isDirectory) {
+            return emptyList()
+        }
 
         return dir.walkTopDown()
             .filter { it.isFile }
@@ -176,48 +231,35 @@ class FileRepositoryImpl @Inject constructor(
                 // Optionally compute a checksum, e.g. MD5, or just leave blank for now
                 val checksum = ""
 
-                // Optionally detect mime-type; here we leave it null
+                // Optionally detect mime-type here (we leave it null)
                 val mimeType: String? = null
 
                 FileIndex(
-                    name        = file.name,
-                    path        = file.absolutePath,
-                    size        = file.length(),
-                    checksum    = checksum,
-                    createdAt   = createdAt,
-                    modifiedAt  = Date(file.lastModified()),
-                    // shouldBackup and isBackedUp use their default values,
-                    // backedUpAt    = null by default
-                    fileType    = file.extension,
-                    mimeType    = mimeType
+                    name = file.name,
+                    path = file.absolutePath,
+                    size = file.length(),
+                    checksum = checksum,
+                    createdAt = createdAt,
+                    modifiedAt = Date(file.lastModified()),
+                    // shouldBackup and isBackedUp use their default values
+                    // backedUpAt = null by default
+                    fileType = file.extension,
+                    mimeType = mimeType
                 )
             }
             .toList()
     }
-    override suspend fun countBackupErrors(): Int {
-        return fileDao.countFilesWithErrors()       // implement here
-    }
 
-    override suspend fun countFailedBackupFiles(): Int {
-        return fileDao.countFailedBackups()         // implement here
-    }
-
+    // Statistics methods
+    override suspend fun countBackupErrors(): Int = fileDao.countFilesWithErrors()
+    override suspend fun countFailedBackupFiles(): Int = fileDao.countFailedBackups()
     override suspend fun countAllFiles(): Int = fileDao.countAllFiles()
-
     override suspend fun countBackedUpFiles(): Int = fileDao.countBackedUpFiles()
-
     override suspend fun sumAllFileSizes(): Long = fileDao.sumAllFileSizes() ?: 0L
-
     override suspend fun sumBackedUpFileSizes(): Long = fileDao.sumBackedUpFileSizes() ?: 0L
     override suspend fun getBackedUpCount(): Int = fileDao.getBackedUpCount()
-
     override suspend fun getTotalSize(): Long = fileDao.getTotalSize() ?: 0L
-
     override suspend fun getBackedUpSize(): Long = fileDao.getBackedUpSize() ?: 0L
-
     override suspend fun countFilesWithErrors(): Int = fileDao.countFilesWithErrors()
-
     override suspend fun countFailedBackups(): Int = fileDao.countFailedBackups()
-
-
 }

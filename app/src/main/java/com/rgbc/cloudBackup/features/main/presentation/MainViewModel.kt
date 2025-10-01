@@ -1,458 +1,698 @@
-// File: MainViewModel.kt
 package com.rgbc.cloudBackup.features.main.presentation
 
-import com.rgbc.cloudBackup.core.domain.usecase.GetBackupStatisticsUseCase
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rgbc.cloudBackup.core.data.database.entity.FileIndex
-import com.rgbc.cloudBackup.core.domain.usecase.*
-import com.rgbc.cloudBackup.core.utils.DirectoryProvider
+import com.rgbc.cloudBackup.core.domain.usecase.GetAllFilesUseCase
+import com.rgbc.cloudBackup.core.domain.usecase.GetFilesToBackupUseCase
+import com.rgbc.cloudBackup.core.domain.usecase.GetBackupStatisticsUseCase
+import com.rgbc.cloudBackup.core.domain.usecase.UploadFileUseCase
+import com.rgbc.cloudBackup.core.network.api.BackupApiService
+import com.rgbc.cloudBackup.core.domain.model.BackupStats
+import com.rgbc.cloudBackup.core.domain.repository.FileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import timber.log.Timber
 import javax.inject.Inject
 import android.content.Context
 import android.net.Uri
-import com.rgbc.cloudBackup.core.security.CryptoManager
-import com.rgbc.cloudBackup.core.security.SecurityAuditLogger
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.delay
+import androidx.documentfile.provider.DocumentFile
+import com.rgbc.cloudBackup.core.domain.usecase.UploadProgress
 import java.io.File
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-
+import java.io.FileOutputStream
+import java.util.Date
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    private val scanFilesUseCase: ScanFilesUseCase,
     private val getAllFilesUseCase: GetAllFilesUseCase,
     private val getFilesToBackupUseCase: GetFilesToBackupUseCase,
-    private val insertFileUseCase: InsertFileUseCase,
     private val getBackupStatsUseCase: GetBackupStatisticsUseCase,
     private val uploadFileUseCase: UploadFileUseCase,
-    private val downloadFileUseCase: DownloadFileUseCase,
-    private val directoryProvider: DirectoryProvider,
-    private val cryptoManager: CryptoManager,
-    private val auditLogger: SecurityAuditLogger,
+    private val backupApiService: BackupApiService, // DIRECT: Inject API service directly
+    private val fileRepository: FileRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
+    // UI State management
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
+    // Database-backed state flows
     private val _allFiles = MutableStateFlow<List<FileIndex>>(emptyList())
     val allFiles: StateFlow<List<FileIndex>> = _allFiles.asStateFlow()
 
     private val _filesToBackup = MutableStateFlow<List<FileIndex>>(emptyList())
     val filesToBackup: StateFlow<List<FileIndex>> = _filesToBackup.asStateFlow()
 
+    // UI State for display
+    private val _files = MutableStateFlow<List<FileItem>>(emptyList())
+    val files: StateFlow<List<FileItem>> = _files.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    // Upload progress tracking
+    private val _uploadProgress = MutableStateFlow<Map<String, LocalUploadProgress>>(emptyMap())
+    val uploadProgress: StateFlow<Map<String, LocalUploadProgress>> = _uploadProgress.asStateFlow()
+
+    // Statistics
+    private val _backupStatistics = MutableStateFlow(BackupStats())
+    val backupStatistics: StateFlow<BackupStats> = _backupStatistics.asStateFlow()
+
+    // Flag to prevent database observation conflicts during operations
+    private var operationInProgress = false
+
     init {
         Timber.d("🔧 MainViewModel initialized")
-
-        // 🔧 FIX: Start continuous database observation
         startDatabaseObservation()
-
-        // Initial data load
         refreshData()
     }
 
-    // FIND the refreshData() function and REPLACE it with this improved version:
-    // REPLACE the existing refreshData() function:
-    @OptIn(DelicateCoroutinesApi::class)
-    fun refreshData() {
-        // 🔧 CRITICAL FIX: Use GlobalScope to prevent cancellation during navigation
-        GlobalScope.launch(Dispatchers.IO) {
-            try {
-                withContext(Dispatchers.Main) {
-                    _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-                    Timber.d("🔄 Starting navigation-safe data refresh...")
-                }
-
-                // Brief loading delay on IO thread
-                delay(300)
-
-                // Database operations on IO thread
-                val currentFiles = getAllFilesUseCase().first()
-                val currentPending = getFilesToBackupUseCase().first()
-                val currentStats = getBackupStatsUseCase()
-
-                // Update UI on Main thread
-                withContext(Dispatchers.Main) {
-                    _allFiles.value = currentFiles
-                    _filesToBackup.value = currentPending
-
-                    _uiState.update {
-                        it.copy(
-                            backupStatistics = currentStats,
-                            lastRefreshTime = System.currentTimeMillis(),
-                            isLoading = false,
-                            successMessage = "✅ Refreshed successfully"
-                        )
-                    }
-
-                    Timber.d("✅ Navigation-safe refresh complete: ${currentFiles.size} files, ${currentStats.backedUpFiles} backed up")
-                }
-
-                // Clear success message after delay
-                delay(2000)
-                withContext(Dispatchers.Main) {
-                    _uiState.update { it.copy(successMessage = null) }
-                }
-
-            } catch (e: Exception) {
-                if (e !is kotlinx.coroutines.CancellationException) {
-                    withContext(Dispatchers.Main) {
-                        _uiState.update {
-                            it.copy(
-                                errorMessage = "Refresh failed: ${e.message}",
-                                isLoading = false
-                            )
-                        }
-                    }
-                    Timber.e(e, "❌ Failed to refresh data")
-                } else {
-                    Timber.w("⚠️ Refresh was cancelled, but that's OK in GlobalScope")
-                }
-            }
-        }
-    }
-
-
-
-
-
-    // ADD this function to force refresh from directory screen
-    fun forceRefreshAfterBackup() {
-        viewModelScope.launch {
-            Timber.d("🔄 Force refresh after backup operation")
-            delay(2000) // Wait for database commits
-            refreshData()
-
-            // Additional verification
-            delay(1000)
-            val verifyFiles = getAllFilesUseCase().first()
-            val backedUpCount = verifyFiles.count { it.isBackedUp }
-            Timber.d("🔍 Post-backup verification: ${backedUpCount}/${verifyFiles.size} files backed up")
-        }
-    }
-
-
-    // 🆕 ADD: New function to force refresh from other screens
-    fun forceRefreshFromDirectory() {
-        viewModelScope.launch {
-            Timber.d("🔄 Force refresh triggered from directory screen")
-            delay(500) // Small delay to ensure database has been updated
-            refreshData()
-        }
-    }
-
-
-    fun clearError() {
-        _uiState.update { it.copy(errorMessage = null) }
-    }
-
-    // ADD these functions to MainViewModel.kt:
-
-    fun uploadSingleFile(file: FileIndex) {
-        viewModelScope.launch {
-            try {
-                val safeDisplayName = getSafeDisplayName(file.name)
-                Timber.i("📤 Starting individual upload for: $safeDisplayName")
-                Timber.d("📁 Original file path: ${file.path}")
-
-                // 🔧 FIX: Create temp file from original path for upload
-                val originalFile = getOriginalFile(file.path)
-                if (originalFile == null || !originalFile.exists()) {
-                    Timber.e("❌ Original file not accessible: ${file.path}")
-                    _uiState.update { it.copy(errorMessage = "❌ File not accessible. May have been moved or deleted.") }
-                    return@launch
-                }
-
-                _uiState.update { it.copy(errorMessage = "📤 Uploading $safeDisplayName...") }
-
-                // Create temporary file for upload process
-                val tempFile = createTempFileForUpload(originalFile)
-                if (tempFile == null) {
-                    _uiState.update { it.copy(errorMessage = "❌ Failed to prepare file for upload") }
-                    return@launch
-                }
-
-                // Create temporary FileIndex for upload with temp path
-                val uploadFileIndex = file.copy(path = tempFile.absolutePath)
-
-                uploadFileUseCase.execute(uploadFileIndex).collect { progress ->
-                    when (progress) {
-                        is UploadProgress.Completed -> {
-                            _uiState.update { it.copy(errorMessage = "✅ Upload completed!") }
-                            // Clean up temp file
-                            tempFile.delete()
-                            // Force refresh with delay
-                            delay(1000)
-                            refreshData()
-                            Timber.d("🔄 Refreshed data after successful upload")
-                        }
-                        is UploadProgress.Failed -> {
-                            _uiState.update { it.copy(errorMessage = "❌ Upload failed: ${progress.error}") }
-                            tempFile.delete() // Clean up on failure too
-                            Timber.e("❌ Upload failed: ${progress.error}")
-                        }
-                        else -> {
-                            Timber.v("📤 Upload progress: $progress")
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = "Upload failed: ${e.message}") }
-                Timber.e(e, "❌ Individual upload failed")
-            }
-        }
-    }
-
-    // 🆕 ADD: Helper function to get original file
-    private fun getOriginalFile(path: String): File? {
-        return try {
-            // Handle different path types
-            when {
-                path.startsWith("content://") -> {
-                    // Handle content URI paths - convert to temp file
-                    val uri = Uri.parse(path)
-                    createTempFileFromUri(uri)
-                }
-                path.startsWith("/") -> {
-                    // Regular file system path
-                    File(path)
-                }
-                else -> {
-                    Timber.w("⚠️ Unknown path format: $path")
-                    null
-                }
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "❌ Error getting original file: $path")
-            null
-        }
-    }
-
-    // 🆕 ADD: Helper to create temp file from URI
-    private fun createTempFileFromUri(uri: Uri): File? {
-        return try {
-            val inputStream = context.contentResolver.openInputStream(uri)
-            inputStream?.use { input ->
-                val tempFile = File(context.cacheDir, "upload_temp_${System.currentTimeMillis()}")
-                tempFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-                tempFile
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "❌ Failed to create temp file from URI")
-            null
-        }
-    }
-
-    // 🆕 ADD: Helper to create temp file for upload
-    private fun createTempFileForUpload(originalFile: File): File? {
-        return try {
-            val tempFile = File(context.cacheDir, "upload_temp_${System.currentTimeMillis()}_${originalFile.name}")
-            originalFile.copyTo(tempFile, overwrite = true)
-            Timber.d("📁 Created temp file for upload: ${tempFile.absolutePath}")
-            tempFile
-        } catch (e: Exception) {
-            Timber.e(e, "❌ Failed to create temp file for upload")
-            null
-        }
-    }
-
-
-
-    fun downloadSingleFile(file: FileIndex) {
-        viewModelScope.launch {
-            try {
-                val safeDisplayName = getSafeDisplayName(file.name)
-                Timber.i("📥 Starting individual download for: $safeDisplayName")
-
-                _uiState.update { it.copy(errorMessage = "📥 Downloading $safeDisplayName...") }
-
-                val downloadsDir = File(context.filesDir, "downloads").apply { mkdirs() }
-
-                downloadFileUseCase.execute(file, downloadsDir).collect { progress ->
-                    when (progress) {
-                        is DownloadProgress.Completed -> {
-                            _uiState.update { it.copy(errorMessage = "✅ Download completed!") }
-                        }
-                        is DownloadProgress.Failed -> {
-                            _uiState.update { it.copy(errorMessage = "❌ Download failed: ${progress.error}") }
-                        }
-                        else -> {
-                            Timber.v("📥 Download progress: $progress")
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = "Download failed: ${e.message}") }
-                Timber.e(e, "❌ Individual download failed")
-            }
-        }
-    }
-
-    @OptIn(DelicateCoroutinesApi::class)
-    fun deleteSingleFile(file: FileIndex) {
-        GlobalScope.launch(Dispatchers.IO) {
-            try {
-                val safeDisplayName = getSafeDisplayName(file.name)
-                Timber.i("🗑️ Starting file deletion: $safeDisplayName")
-
-                withContext(Dispatchers.Main) {
-                    _uiState.update { it.copy(errorMessage = "🗑️ Deleting $safeDisplayName...") }
-                }
-
-                // 1. Delete from local file system
-                val localFile = File(file.path)
-                if (localFile.exists()) {
-                    val deleted = localFile.delete()
-                    if (deleted) {
-                        Timber.d("🗑️ Deleted local file successfully")
-                    } else {
-                        Timber.w("⚠️ Failed to delete local file, but continuing...")
-                    }
-                }
-
-                // 2. Delete from server if backed up
-                if (file.isBackedUp) {
-                    try {
-                        // TODO: Add server delete API call here
-                        Timber.d("🌐 Server deletion would happen here")
-                    } catch (e: Exception) {
-                        Timber.e(e, "Failed to delete from server")
-                    }
-                }
-
-                // 3. Delete from database
-                try {
-                    // Use your file repository to delete
-                    // fileRepository.deleteFile(file) - You'll need to implement this
-                    Timber.d("🗄️ Database deletion would happen here")
-                } catch (e: Exception) {
-                    Timber.e(e, "Failed to delete from database")
-                }
-
-                withContext(Dispatchers.Main) {
-                    _uiState.update { it.copy(errorMessage = "✅ File deleted successfully") }
-                }
-
-                // Refresh data after deletion
-                delay(500)
-                refreshData()
-
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    _uiState.update { it.copy(errorMessage = "Delete failed: ${e.message}") }
-                }
-                Timber.e(e, "❌ File deletion failed")
-            }
-        }
-    }
-
-
-    private fun getSafeDisplayName(fileName: String): String {
-        return "File_${fileName.hashCode().toString().takeLast(8)}"
-    }
-
-
-    @OptIn(DelicateCoroutinesApi::class)
+    // Database observation with operation conflict prevention
     private fun startDatabaseObservation() {
-        // 🔧 FIX: Use GlobalScope for database observation
-        GlobalScope.launch(Dispatchers.IO) {
+        // Observe all files
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Observe file changes in real-time
                 getAllFilesUseCase().collect { files ->
-                    withContext(Dispatchers.Main) {
-                        _allFiles.value = files
+                    // Skip update if operation in progress to prevent conflicts
+                    if (!operationInProgress) {
+                        withContext(Dispatchers.Main) {
+                            _allFiles.value = files
+                            updateDisplayFiles(files)
+                            Timber.d("📊 Real-time file update: ${files.size} files, ${files.count { it.isBackedUp }} backed up")
+                        }
                     }
-                    Timber.d("🔄 Real-time file update: ${files.size} files, ${files.count { it.isBackedUp }} backed up")
 
                     // Update statistics when files change
                     try {
                         val stats = getBackupStatsUseCase()
                         withContext(Dispatchers.Main) {
-                            _uiState.update { it.copy(backupStatistics = stats) }
+                            _backupStatistics.value = stats
+                            if (!operationInProgress) {
+                                _uiState.update { it.copy(backupStatistics = stats) }
+                            }
                         }
                     } catch (e: Exception) {
                         Timber.e(e, "Failed to update statistics")
                     }
                 }
             } catch (e: Exception) {
-                if (e !is kotlinx.coroutines.CancellationException) {
-                    Timber.e(e, "Database observation failed")
+                Timber.e(e, "Database observation failed")
+                withContext(Dispatchers.Main) {
+                    _error.value = "Database observation failed: ${e.message}"
+                    if (!operationInProgress) {
+                        _uiState.update { it.copy(errorMessage = "Database observation failed: ${e.message}") }
+                    }
                 }
             }
         }
 
-        GlobalScope.launch(Dispatchers.IO) {
+        // Also observe pending files
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Observe pending files
                 getFilesToBackupUseCase().collect { pendingFiles ->
-                    withContext(Dispatchers.Main) {
-                        _filesToBackup.value = pendingFiles
+                    if (!operationInProgress) {
+                        withContext(Dispatchers.Main) {
+                            _filesToBackup.value = pendingFiles
+                            Timber.d("📋 Pending files update: ${pendingFiles.size} files")
+                        }
                     }
-                    Timber.d("🔄 Real-time pending files update: ${pendingFiles.size} files")
                 }
             } catch (e: Exception) {
-                if (e !is kotlinx.coroutines.CancellationException) {
-                    Timber.e(e, "Pending files observation failed")
-                }
+                Timber.e(e, "Pending files observation failed")
             }
         }
     }
 
+    // Convert FileIndex to FileItem for UI display
+    private fun updateDisplayFiles(fileIndexList: List<FileIndex>) {
+        val fileItems = fileIndexList.map { fileIndex ->
+            FileItem(
+                id = fileIndex.id.toString(),
+                name = fileIndex.name,
+                size = fileIndex.size,
+                mimeType = fileIndex.mimeType ?: "application/octet-stream",
+                path = fileIndex.path,
+                lastModified = fileIndex.modifiedAt?.time ?: fileIndex.createdAt.time,
+                isUploaded = fileIndex.isBackedUp,
+                uploadProgress = if (fileIndex.isBackedUp) 1f else 0f,
+                directoryName = fileIndex.fileType ?: "",
+                isImage = fileIndex.mimeType?.startsWith("image/") == true,
+                isVideo = fileIndex.mimeType?.startsWith("video/") == true,
+                isDocument = fileIndex.mimeType?.let {
+                    it.contains("pdf") || it.contains("document") || it.contains("text")
+                } == true
+            )
+        }
+        _files.value = fileItems
+    }
 
-    // 🆕 ADD: Force refresh from external triggers
-    @OptIn(DelicateCoroutinesApi::class)
-    fun triggerExternalRefresh(reason: String) {
-        GlobalScope.launch(Dispatchers.IO) {
+    // Upload with proper database persistence
+    fun uploadSingleFile(fileIndex: FileIndex) {
+        viewModelScope.launch {
             try {
-                Timber.d("🔄 External refresh triggered: $reason")
-                delay(1000) // Allow database to settle
+                operationInProgress = true // Prevent database conflicts
 
-                // Force fresh queries on IO thread
-                val freshFiles = getAllFilesUseCase().first()
-                val freshPending = getFilesToBackupUseCase().first()
-                val freshStats = getBackupStatsUseCase()
+                Timber.d("📤 Starting upload for: ${fileIndex.name}")
+                _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-                withContext(Dispatchers.Main) {
-                    _allFiles.value = freshFiles
-                    _filesToBackup.value = freshPending
+                // Convert to actual file for upload
+                val actualFile = convertUriToFile(fileIndex.path, fileIndex.name)
+                if (actualFile == null || !actualFile.exists()) {
                     _uiState.update {
                         it.copy(
-                            backupStatistics = freshStats,
-                            lastRefreshTime = System.currentTimeMillis(),
-                            errorMessage = "🔄 Refreshed ($reason)"
+                            isLoading = false,
+                            errorMessage = "File not accessible: ${fileIndex.name}"
                         )
+                    }
+                    operationInProgress = false
+                    return@launch
+                }
+
+                // Start upload with progress tracking
+                uploadFileUseCase.execute(actualFile).collect { progress ->
+                    when (progress::class.simpleName) {
+                        "Starting" -> {
+                            Timber.d("📤 Upload starting: ${fileIndex.name}")
+                            _uploadProgress.value = _uploadProgress.value + (fileIndex.id.toString() to
+                                    LocalUploadProgress.InProgress(5, 0, actualFile.length()))
+                        }
+                        "Uploading" -> {
+                            Timber.d("📤 Uploading: ${fileIndex.name}")
+                            _uploadProgress.value = _uploadProgress.value + (fileIndex.id.toString() to
+                                    LocalUploadProgress.InProgress(75, actualFile.length() / 2, actualFile.length()))
+                        }
+                        "Completed" -> {
+                            _uploadProgress.value = _uploadProgress.value - fileIndex.id.toString()
+
+                            // Actually update database
+                            try {
+
+                                val serverFileId = extractServerFileIdFromProgress(progress)
+                                Timber.w("$serverFileId is returned")
+
+                                if (serverFileId != null) {
+                                    // Store server file ID in database for future downloads
+                                    fileRepository.updateServerFileId(fileIndex.id, serverFileId)
+                                    Timber.i("✅ Server file ID stored: ${fileIndex.id} → $serverFileId")
+                                }
+
+
+                                fileRepository.markAsBackedUp(fileIndex.id)
+                                Timber.i("✅ Database updated - file marked as backed up: ${fileIndex.name}")
+
+                                // Update local state to match database
+                                val updatedFiles = _allFiles.value.map { file ->
+                                    if (file.id == fileIndex.id) {
+                                        file.copy(isBackedUp = true, backedUpAt = Date(),serverFileId = serverFileId)
+                                    } else {
+                                        file
+                                    }
+                                }
+                                _allFiles.value = updatedFiles
+                                updateDisplayFiles(updatedFiles)
+
+                            } catch (e: Exception) {
+                                Timber.e(e, "❌ Failed to update database for file: ${fileIndex.name}")
+                                _uiState.update {
+                                    it.copy(errorMessage = "Upload succeeded but failed to update database: ${e.message}")
+                                }
+                            }
+
+                            // Clean up temp file
+                            try {
+                                actualFile.delete()
+                            } catch (e: Exception) {
+                                Timber.w(e, "Failed to delete temp file")
+                            }
+
+                            // Update UI state
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    successMessage = "✅ Upload completed: ${fileIndex.name}"
+                                )
+                            }
+
+                            // Clear success message after delay
+                            delay(3000)
+                            _uiState.update { it.copy(successMessage = null) }
+
+                            Timber.i("📤 ✅ Upload completed and persisted: ${fileIndex.name}")
+                        }
+                        "Failed" -> {
+                            _uploadProgress.value = _uploadProgress.value - fileIndex.id.toString()
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    errorMessage = "❌ Upload failed: Unknown error"
+                                )
+                            }
+                            Timber.e("📤 ❌ Upload failed: ${fileIndex.name}")
+                        }
+                        else -> {
+                            Timber.d("📤 Upload state: ${progress::class.simpleName} for ${fileIndex.name}")
+                        }
                     }
                 }
 
-                Timber.d("✅ External refresh complete: ${freshFiles.size} files, ${freshStats.backedUpFiles} backed up")
-
-                // Clear refresh message after delay
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Upload error: ${e.message}"
+                    )
+                }
+                Timber.e(e, "Upload error for: ${fileIndex.name}")
+            } finally {
+                // Re-enable database observation after delay
                 delay(2000)
-                withContext(Dispatchers.Main) {
+                operationInProgress = false
+                Timber.d("🔄 Database observation re-enabled")
+            }
+        }
+    }
+
+    // SIMPLIFIED: Download with direct API call (no use case dependency issues)
+    fun downloadSingleFile(fileIndex: FileIndex) {
+        viewModelScope.launch {
+            try {
+                val safeDisplayName = getSafeDisplayName(fileIndex.name)
+
+                // Check if file is actually backed up
+                if (!fileIndex.isBackedUp) {
+                    _uiState.update {
+                        it.copy(errorMessage = "❌ File is not backed up yet. Upload it first.")
+                    }
+                    Timber.w("⚠️ Download attempted on non-backed-up file: $safeDisplayName")
+                    return@launch
+                }
+
+                operationInProgress = true
+                Timber.i("📥 Starting DIRECT download for: $safeDisplayName (ID: ${fileIndex.id})")
+                _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null) }
+
+                // Use proper Downloads directory with fallbacks
+                val downloadsDir = try {
+                    // Try external storage Downloads directory first
+                    val externalDownloads = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "CloudBackup")
+                    if (externalDownloads.exists() || externalDownloads.mkdirs()) {
+                        externalDownloads
+                    } else {
+                        // Fallback to app-specific external files
+                        File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS), "CloudBackup").apply { mkdirs() }
+                    }
+                } catch (e: Exception) {
+                    // Ultimate fallback to internal storage
+                    File(context.filesDir, "downloads/CloudBackup").apply { mkdirs() }
+                }
+
+                Timber.d("📁 Download directory: ${downloadsDir.absolutePath}")
+
+                try {
+
+                    val downloadFileId = if (fileIndex.serverFileId != null) {
+                        Timber.d("📥 Using server file ID for download: ${fileIndex.serverFileId}")
+                        fileIndex.serverFileId.toString()
+                    } else {
+                        Timber.w("📥 No server file ID available, using database ID: ${fileIndex.id}")
+                        fileIndex.id.toString()
+                    }
+
+                    // DIRECT API CALL: Call BackupApiService directly
+                    val fileId = fileIndex.id.toString()
+                    Timber.d("📥 Calling server API directly for file ID: $fileId")
+
+                    _uiState.update { it.copy(errorMessage = "📥 Downloading from server...") }
+
+                    val response = withContext(Dispatchers.IO) {
+                        backupApiService.downloadFileById(fileId)
+                    }
+
+                    if (response.isSuccessful && response.body() != null) {
+                        val responseBody = response.body()!!
+                        val outputFile = File(downloadsDir, safeDisplayName)
+
+                        Timber.d("📥 Server response successful, saving to: ${outputFile.absolutePath}")
+                        _uiState.update { it.copy(errorMessage = "📥 Saving file...") }
+
+                        // Write response body to file
+                        withContext(Dispatchers.IO) {
+                            responseBody.byteStream().use { inputStream ->
+                                outputFile.outputStream().use { outputStream ->
+                                    val buffer = ByteArray(8192)
+                                    var totalBytes = 0L
+                                    var bytes = inputStream.read(buffer)
+
+                                    while (bytes != -1) {
+                                        outputStream.write(buffer, 0, bytes)
+                                        totalBytes += bytes
+                                        bytes = inputStream.read(buffer)
+                                    }
+
+                                    outputStream.flush()
+                                }
+                            }
+                        }
+
+                        // Verify file was created and has content
+                        if (outputFile.exists() && outputFile.length() > 0) {
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    successMessage = "📥 ✅ Download completed!\nFile: ${outputFile.name}\nSize: ${outputFile.length()} bytes\nPath: ${outputFile.absolutePath}",
+                                    errorMessage = null
+                                )
+                            }
+
+                            Timber.i("📥 ✅ DIRECT download completed successfully!")
+                            Timber.i("📁 File: ${outputFile.absolutePath}")
+                            Timber.i("📊 Size: ${outputFile.length()} bytes")
+                            Timber.i("🆔 Used file ID: $downloadFileId")
+
+
+                            // Read and log first few bytes to verify content
+                            try {
+                                val preview = outputFile.readText().take(100)
+                                Timber.i("📄 Content preview: $preview")
+                            } catch (e: Exception) {
+                                Timber.i("📄 File is binary or encrypted (cannot preview as text)")
+                            }
+
+                            // Clear success message after longer delay
+                            delay(12000)
+                            _uiState.update { it.copy(successMessage = null) }
+
+                        } else {
+                            throw Exception("Downloaded file is empty or not created")
+                        }
+
+                    } else {
+                        val errorMsg = "Server error: ${response.code()} - ${response.message()}"
+                        throw Exception(errorMsg)
+                    }
+
+                } catch (e: Exception) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = "📥 ❌ Download failed: ${e.message}",
+                            successMessage = null
+                        )
+                    }
+
+                    Timber.e(e, "📥 ❌ DIRECT download failed")
+
+                    // Clear error after delay
+                    delay(7000)
                     _uiState.update { it.copy(errorMessage = null) }
                 }
 
             } catch (e: Exception) {
-                if (e !is kotlinx.coroutines.CancellationException) {
-                    Timber.e(e, "❌ External refresh failed")
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "📥 ❌ Download failed: ${e.message}",
+                        successMessage = null
+                    )
+                }
+                Timber.e(e, "📥 ❌ Download exception for: ${fileIndex.name}")
+
+                // Clear error after delay
+                delay(5000)
+                _uiState.update { it.copy(errorMessage = null) }
+            } finally {
+                // Re-enable database observation
+                delay(1000)
+                operationInProgress = false
+            }
+        }
+    }
+
+    // Delete single file
+    fun deleteSingleFile(fileIndex: FileIndex) {
+        viewModelScope.launch {
+            try {
+                val safeDisplayName = getSafeDisplayName(fileIndex.name)
+
+                Timber.d("🗑️ Delete requested for: $safeDisplayName")
+                _uiState.update { it.copy(isLoading = true) }
+
+                // Try to delete from database via repository
+                try {
+                    fileRepository.deleteFile(fileIndex)
+                    Timber.d("✅ File deleted from database: $safeDisplayName")
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to delete from database, removing from local state only")
+                }
+
+                // Remove from local state
+                val updatedFiles = _allFiles.value.filter { it.id != fileIndex.id }
+                _allFiles.value = updatedFiles
+                updateDisplayFiles(updatedFiles)
+
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        successMessage = "🗑️ ✅ File deleted: $safeDisplayName"
+                    )
+                }
+
+                // Clear message after delay
+                delay(2000)
+                _uiState.update { it.copy(successMessage = null) }
+
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "🗑️ ❌ Delete failed: ${e.message}"
+                    )
+                }
+                Timber.e(e, "Delete failed for: ${fileIndex.name}")
+            }
+        }
+    }
+
+    // Data refresh with proper error handling
+    fun refreshData() {
+        viewModelScope.launch {
+            try {
+                if (!operationInProgress) {
+                    _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+                }
+                _isLoading.value = true
+                Timber.d("🔄 Refreshing data from database...")
+
+                delay(500)
+
+                val freshFiles = getAllFilesUseCase().first()
+                val freshPending = getFilesToBackupUseCase().first()
+                val freshStats = getBackupStatsUseCase()
+
+                if (!operationInProgress) {
+                    _allFiles.value = freshFiles
+                    _filesToBackup.value = freshPending
+                    _backupStatistics.value = freshStats
+                    updateDisplayFiles(freshFiles)
+
+                    // Update UI state
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            backupStatistics = freshStats,
+                            lastRefreshTime = System.currentTimeMillis()
+                        )
+                    }
+                }
+
+                Timber.d("✅ Refresh complete: ${freshFiles.size} files, ${freshStats.backedUpFiles} backed up")
+                clearError()
+
+            } catch (e: Exception) {
+                _error.value = "Failed to refresh data: ${e.message}"
+                if (!operationInProgress) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = "Failed to refresh: ${e.message}"
+                        )
+                    }
+                }
+                Timber.e(e, "Data refresh failed")
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    // Content URI to file conversion
+    private suspend fun convertUriToFile(uriString: String, fileName: String): File? = withContext(Dispatchers.IO) {
+        try {
+            when {
+                uriString.startsWith("file://") -> {
+                    File(Uri.parse(uriString).path ?: uriString)
+                }
+                uriString.startsWith("content://") -> {
+                    val uri = Uri.parse(uriString)
+                    val documentFile = DocumentFile.fromSingleUri(context, uri)
+
+                    if (documentFile?.exists() != true) {
+                        return@withContext null
+                    }
+
+                    val tempFile = File(context.cacheDir, "temp_$fileName")
+                    context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                        FileOutputStream(tempFile).use { outputStream ->
+                            inputStream.copyTo(outputStream)
+                        }
+                    }
+                    tempFile
+                }
+                else -> {
+                    File(uriString)
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to convert URI to file: $uriString")
+            null
+        }
+    }
+
+    // Helper function to generate safe display names
+    private fun getSafeDisplayName(originalName: String): String {
+        return try {
+            if (originalName.isBlank()) {
+                "Unknown_File"
+            } else {
+                "File_${originalName.hashCode().toString().takeLast(8)}"
+            }
+        } catch (e: Exception) {
+            "File_${System.currentTimeMillis().toString().takeLast(8)}"
+        }
+    }
+
+    // External refresh trigger
+    fun triggerExternalRefresh(source: String) {
+        if (!operationInProgress) {
+            viewModelScope.launch {
+                try {
+                    Timber.d("🔄 External refresh triggered from: $source")
+                    _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+
+                    delay(500)
+                    refreshData()
+
+                } catch (e: Exception) {
+                    Timber.e(e, "External refresh failed from $source")
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = "Refresh failed: ${e.message}"
+                        )
+                    }
                 }
             }
         }
     }
 
+    // Force refresh function
+    fun forceDataRefresh() {
+        Timber.d("🔄 Force refresh requested")
+        if (!operationInProgress) {
+            refreshData()
+        } else {
+            Timber.d("🔄 Force refresh skipped - operation in progress")
+        }
+    }
 
+    // Directory operation completion notification
+    fun notifyDirectoryOperationComplete() {
+        viewModelScope.launch {
+            Timber.d("📢 Notified of directory operation completion")
+            delay(1000)
+            forceDataRefresh()
+        }
+    }
 
+    // Clear errors
+    fun clearError() {
+        _error.value = null
+        if (!operationInProgress) {
+            _uiState.update { it.copy(errorMessage = null) }
+        }
+    }
 
+    // Statistics helpers
+    fun getUploadedFileCount(): Int = _allFiles.value.count { it.isBackedUp }
+    fun getTotalFileSize(): Long = _allFiles.value.sumOf { it.size }
+    fun getTotalFileCount(): Int = _allFiles.value.size
 
+    override fun onCleared() {
+        super.onCleared()
+        Timber.d("🧹 MainViewModel cleared")
+    }
 }
 
+private fun extractServerFileIdFromProgress(progress: Any): Long? {
+    return try {
+        when (progress) {
+            is UploadProgress.Completed -> {
+                // Direct access - no reflection needed
+                val serverId = progress.serverId.toLongOrNull()
+                Timber.d("📝 Found serverId in Completed: '${progress.serverId}' → $serverId")
+                serverId
+            }
+            else -> {
+                Timber.d("🚫 Progress type '${progress::class.simpleName}' does not contain server ID")
+                null
+            }
+        }
+    } catch (e: Exception) {
+        Timber.w(e, "❌ Could not extract server file ID from progress")
+        null
+    }
+}
+
+
+// Simplified UI State data class
+//data class MainUiState(
+//    val isScanning: Boolean = false,
+//    val isLoading: Boolean = false,
+//    val backupStatistics: BackupStats = BackupStats(),
+//    val errorMessage: String? = null,
+//    val successMessage: String? = null,
+//    val lastRefreshTime: Long = 0L
+//)
+
+// FileItem for UI display
+data class FileItem(
+    val id: String,
+    val name: String,
+    val size: Long,
+    val mimeType: String,
+    val path: String,
+    val lastModified: Long,
+    val isUploaded: Boolean = false,
+    val uploadProgress: Float = 0f,
+    val directoryName: String = "",
+    val isImage: Boolean = false,
+    val isVideo: Boolean = false,
+    val isDocument: Boolean = false
+)
+
+// Local UploadProgress states
+sealed class LocalUploadProgress {
+    object Idle : LocalUploadProgress()
+    data class InProgress(val percentage: Int, val bytesUploaded: Long, val totalBytes: Long) : LocalUploadProgress()
+    data class Completed(val serverId: String, val serverFileName: String) : LocalUploadProgress()
+    data class Failed(val error: String) : LocalUploadProgress()
+}

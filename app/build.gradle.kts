@@ -98,6 +98,9 @@ dependencies {
     implementation(libs.sqlcipher)
     implementation(libs.androidx.sqlite)
     kapt(libs.androidx.room.compiler)
+    implementation(libs.datastore.preferences)
+    implementation(libs.datastore.core)
+
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)

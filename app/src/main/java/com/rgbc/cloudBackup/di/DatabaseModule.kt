@@ -20,20 +20,23 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): CloudBackupDatabase {
         return Room.databaseBuilder(
-            context.applicationContext,
+            context,
             CloudBackupDatabase::class.java,
             "cloud_backup_database"
         )
-            .fallbackToDestructiveMigration() // For development - remove in production
+            .fallbackToDestructiveMigration() // TEMPORARY: Clears database on schema change
             .build()
     }
 
     @Provides
+    @Singleton
     fun provideFileIndexDao(database: CloudBackupDatabase): FileIndexDao {
         return database.fileIndexDao()
     }
 
+    // ADD: BackupDirectoryDao provider
     @Provides
+    @Singleton
     fun provideBackupDirectoryDao(database: CloudBackupDatabase): BackupDirectoryDao {
         return database.backupDirectoryDao()
     }

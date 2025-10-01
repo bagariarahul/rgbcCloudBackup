@@ -57,5 +57,8 @@ data class FileIndex(
     val lastAttemptedAt: Date? = null,
 
     @ColumnInfo(name = "errorMessage")
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+
+    @ColumnInfo(name = "serverFileId")
+    val serverFileId: Long? = null,
 )

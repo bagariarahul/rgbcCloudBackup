@@ -52,4 +52,5 @@ interface FileRepository {
     suspend fun countFilesWithErrors(): Int
     suspend fun countFailedBackups(): Int
 
+    suspend fun updateServerFileId(fileId: Long, serverFileId: Long)
 }
