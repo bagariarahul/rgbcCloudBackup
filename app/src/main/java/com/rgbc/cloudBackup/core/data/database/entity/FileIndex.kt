@@ -60,5 +60,5 @@ data class FileIndex(
     val errorMessage: String? = null,
 
     @ColumnInfo(name = "serverFileId")
-    val serverFileId: Long? = null,
+    val serverFileId: Long? = null
 )

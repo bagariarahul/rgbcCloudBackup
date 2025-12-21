@@ -328,13 +328,13 @@ class MainViewModel @Inject constructor(
                     }
 
                     // DIRECT API CALL: Call BackupApiService directly
-                    val fileId = fileIndex.id.toString()
-                    Timber.d("📥 Calling server API directly for file ID: $fileId")
+//                    val fileId = fileIndex.id.toString()
+                    Timber.d("📥 Calling server API directly for file ID: $downloadFileId")
 
                     _uiState.update { it.copy(errorMessage = "📥 Downloading from server...") }
 
                     val response = withContext(Dispatchers.IO) {
-                        backupApiService.downloadFileById(fileId)
+                        backupApiService.downloadFileById(downloadFileId)
                     }
 
                     if (response.isSuccessful && response.body() != null) {
@@ -573,7 +573,7 @@ class MainViewModel @Inject constructor(
             if (originalName.isBlank()) {
                 "Unknown_File"
             } else {
-                "File_${originalName.hashCode().toString().takeLast(8)}"
+                originalName.replace("[^a-zA-Z0-9._-]".toRegex(), "_")
             }
         } catch (e: Exception) {
             "File_${System.currentTimeMillis().toString().takeLast(8)}"
