@@ -1,0 +1,230 @@
+Folder PATH listing for volume Local Disk
+Volume serial number is 9E55-88B5
+E:.
+¦   Android_all_files.txt
+¦   app.txt
+¦   filename.txt
+¦   file_lister.py
+¦   
++---androidTest
+¦   +---java
+¦       +---com
+¦           +---rgbc
+¦               +---cloudBackup
+¦                   ¦   ExampleInstrumentedTest.kt
+¦                   ¦   HiltTestRunner.kt
+¦                   ¦   
+¦                   +---core
+¦                       +---data
+¦                           +---database
+¦                           ¦   +---entity
+¦                           ¦           FileIndexDaoTest.kt
+¦                           ¦           
+¦                           +---repository
+¦                                   FileRepositoryImplTest.kt
+¦                                   
++---main
+¦   ¦   AndroidApp.txt
+¦   ¦   AndroidManifest.xml
+¦   ¦   app files.txt
+¦   ¦   file_lister.py
+¦   ¦   
+¦   +---java
+¦   ¦   +---com
+¦   ¦       +---rgbc
+¦   ¦           +---cloudBackup
+¦   ¦               ¦   CloudBackupApplication.kt
+¦   ¦               ¦   MainActivity.kt
+¦   ¦               ¦   
+¦   ¦               +---core
+¦   ¦               ¦   +---auth
+¦   ¦               ¦   ¦       AuthManager.kt
+¦   ¦               ¦   ¦       
+¦   ¦               ¦   +---data
+¦   ¦               ¦   ¦   +---database
+¦   ¦               ¦   ¦   ¦   ¦   CloudBackupDatabase.kt
+¦   ¦               ¦   ¦   ¦   ¦   Converters.kt
+¦   ¦               ¦   ¦   ¦   ¦   DatabaseMigrations.kt
+¦   ¦               ¦   ¦   ¦   ¦   DateConverter.kt
+¦   ¦               ¦   ¦   ¦   ¦   
+¦   ¦               ¦   ¦   ¦   +---entity
+¦   ¦               ¦   ¦   ¦           BackupQueue.kt
+¦   ¦               ¦   ¦   ¦           BackupQueueDao.kt
+¦   ¦               ¦   ¦   ¦           FileIndex.kt
+¦   ¦               ¦   ¦   ¦           FileIndexDao.kt
+¦   ¦               ¦   ¦   ¦           
+¦   ¦               ¦   ¦   +---repository
+¦   ¦               ¦   ¦           FileRepositoryImpl.kt
+¦   ¦               ¦   ¦           PersistentDirectoryRepository.kt
+¦   ¦               ¦   ¦           
+¦   ¦               ¦   +---domain
+¦   ¦               ¦   ¦   +---model
+¦   ¦               ¦   ¦   ¦       BackupStats.kt
+¦   ¦               ¦   ¦   ¦       
+¦   ¦               ¦   ¦   +---provider
+¦   ¦               ¦   ¦   ¦       DirectoryProvider.kt
+¦   ¦               ¦   ¦   ¦       
+¦   ¦               ¦   ¦   +---repository
+¦   ¦               ¦   ¦   ¦       BackupQueueRepository.kt
+¦   ¦               ¦   ¦   ¦       BackupStatistics.kt
+¦   ¦               ¦   ¦   ¦       FileRepository.kt
+¦   ¦               ¦   ¦   ¦       ServerSyncRepository.kt
+¦   ¦               ¦   ¦   ¦       ServerSyncRepositoryImpl.kt
+¦   ¦               ¦   ¦   ¦       
+¦   ¦               ¦   ¦   +---usecase
+¦   ¦               ¦   ¦           CheckDuplicateFileUseCase.kt
+¦   ¦               ¦   ¦           DownloadFileUseCase.kt
+¦   ¦               ¦   ¦           GetAllFilesUseCase.kt
+¦   ¦               ¦   ¦           GetBackupStatisticsUseCase.kt
+¦   ¦               ¦   ¦           GetFilesToBackupUseCase.kt
+¦   ¦               ¦   ¦           InsertFileUseCase.kt
+¦   ¦               ¦   ¦           ScanFilesUseCase.kt
+¦   ¦               ¦   ¦           UploadFileUseCase.kt
+¦   ¦               ¦   ¦           
+¦   ¦               ¦   +---navigation
+¦   ¦               ¦   ¦       Screen.kt
+¦   ¦               ¦   ¦       
+¦   ¦               ¦   +---network
+¦   ¦               ¦   ¦   +---api
+¦   ¦               ¦   ¦   ¦       AuthApiService.kt
+¦   ¦               ¦   ¦   ¦       BackupApiService.kt
+¦   ¦               ¦   ¦   ¦       
+¦   ¦               ¦   ¦   +---model
+¦   ¦               ¦   ¦           NetworkModels.kt
+¦   ¦               ¦   ¦           
+¦   ¦               ¦   +---preferences
+¦   ¦               ¦   ¦       SettingsManager.kt
+¦   ¦               ¦   ¦       
+¦   ¦               ¦   +---presentation
+¦   ¦               ¦   ¦   +---theme
+¦   ¦               ¦   ¦           Theme.kt
+¦   ¦               ¦   ¦           
+¦   ¦               ¦   +---security
+¦   ¦               ¦   ¦       AndroidKeystoreKeyProvider.kt
+¦   ¦               ¦   ¦       BiometricAuthManager.kt
+¦   ¦               ¦   ¦       ChecksumException.kt
+¦   ¦               ¦   ¦       CryptoException.kt
+¦   ¦               ¦   ¦       CryptoManager.kt
+¦   ¦               ¦   ¦       CryptoManagerImpl.kt
+¦   ¦               ¦   ¦       EncryptedData.kt
+¦   ¦               ¦   ¦       KeyProvider.kt
+¦   ¦               ¦   ¦       SecureChecksumUtils.kt
+¦   ¦               ¦   ¦       SecurityAuditLogger.kt
+¦   ¦               ¦   ¦       
+¦   ¦               ¦   +---service
+¦   ¦               ¦   ¦       AutoBackupService.kt
+¦   ¦               ¦   ¦       BackupAgentService.kt
+¦   ¦               ¦   ¦       
+¦   ¦               ¦   +---utils
+¦   ¦               ¦           DirectoryProvider.kt
+¦   ¦               ¦           FileLoggingTree.kt
+¦   ¦               ¦           
+¦   ¦               +---di
+¦   ¦               ¦       DatabaseModule.kt
+¦   ¦               ¦       NetworkModule.kt
+¦   ¦               ¦       RepositoryModule.kt
+¦   ¦               ¦       SecurityModule.kt
+¦   ¦               ¦       UseCaseModule.kt
+¦   ¦               ¦       UtilityModule.kt
+¦   ¦               ¦       
+¦   ¦               +---features
+¦   ¦               ¦   +---auth
+¦   ¦               ¦   ¦   +---presentation
+¦   ¦               ¦   ¦           AuthScreen.kt
+¦   ¦               ¦   ¦           AuthViewModel.kt
+¦   ¦               ¦   ¦           
+¦   ¦               ¦   +---directory
+¦   ¦               ¦   ¦   +---data
+¦   ¦               ¦   ¦   ¦       BackupDirectory.kt
+¦   ¦               ¦   ¦   ¦       BackupDirectoryDao.kt
+¦   ¦               ¦   ¦   ¦       DirectoryModels.kt
+¦   ¦               ¦   ¦   ¦       TypeAliases.kt
+¦   ¦               ¦   ¦   ¦       
+¦   ¦               ¦   ¦   +---presentation
+¦   ¦               ¦   ¦           DirectorySelectionScreen.kt
+¦   ¦               ¦   ¦           DirectoryViewModel.kt
+¦   ¦               ¦   ¦           
+¦   ¦               ¦   +---files
+¦   ¦               ¦   ¦   +---presentation
+¦   ¦               ¦   ¦           FilesScreen.kt
+¦   ¦               ¦   ¦           
+¦   ¦               ¦   +---main
+¦   ¦               ¦   ¦   +---presentation
+¦   ¦               ¦   ¦       ¦   MainScreen.kt
+¦   ¦               ¦   ¦       ¦   MainUiState.kt
+¦   ¦               ¦   ¦       ¦   MainViewModel.kt
+¦   ¦               ¦   ¦       ¦   
+¦   ¦               ¦   ¦       +---components
+¦   ¦               ¦   ¦               ErrorCard.kt
+¦   ¦               ¦   ¦               FileItem.kt
+¦   ¦               ¦   ¦               FileItemCard.kt
+¦   ¦               ¦   ¦               ScanProgressCard.kt
+¦   ¦               ¦   ¦               StatisticsCard.kt
+¦   ¦               ¦   ¦               
+¦   ¦               ¦   +---settings
+¦   ¦               ¦   ¦   +---presentation
+¦   ¦               ¦   ¦           SettingsScreen.kt
+¦   ¦               ¦   ¦           
+¦   ¦               ¦   +---sync
+¦   ¦               ¦       +---presentation
+¦   ¦               ¦               ServerSyncScreen.kt
+¦   ¦               ¦               ServerSyncViewModel.kt
+¦   ¦               ¦               
+¦   ¦               +---ui
+¦   ¦                   +---theme
+¦   ¦                           Color.kt
+¦   ¦                           Theme.kt
+¦   ¦                           Type.kt
+¦   ¦                           
+¦   +---res
+¦       +---drawable
+¦       ¦       ic_launcher_background.xml
+¦       ¦       ic_launcher_foreground.xml
+¦       ¦       ic_notification.xml
+¦       ¦       
+¦       +---mipmap-anydpi-v26
+¦       ¦       ic_launcher.xml
+¦       ¦       ic_launcher_round.xml
+¦       ¦       
+¦       +---mipmap-hdpi
+¦       ¦       ic_launcher.webp
+¦       ¦       ic_launcher_round.webp
+¦       ¦       
+¦       +---mipmap-mdpi
+¦       ¦       ic_launcher.webp
+¦       ¦       ic_launcher_round.webp
+¦       ¦       
+¦       +---mipmap-xhdpi
+¦       ¦       ic_launcher.webp
+¦       ¦       ic_launcher_round.webp
+¦       ¦       
+¦       +---mipmap-xxhdpi
+¦       ¦       ic_launcher.webp
+¦       ¦       ic_launcher_round.webp
+¦       ¦       
+¦       +---mipmap-xxxhdpi
+¦       ¦       ic_launcher.webp
+¦       ¦       ic_launcher_round.webp
+¦       ¦       
+¦       +---values
+¦       ¦       colors.xml
+¦       ¦       strings.xml
+¦       ¦       themes.xml
+¦       ¦       
+¦       +---values-night
+¦       ¦       colors.xml
+¦       ¦       themes.xml
+¦       ¦       
+¦       +---xml
+¦               backup_rules.xml
+¦               data_extraction_rules.xml
+¦               file_paths.xml
+¦               network_security_config.xml
+¦               
++---test
+    +---java
+        +---com
+            +---rgbc
+                +---cloudBackup
+                        ExampleUnitTest.kt
+                        
