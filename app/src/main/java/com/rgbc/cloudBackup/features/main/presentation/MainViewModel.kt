@@ -280,6 +280,140 @@ class MainViewModel @Inject constructor(
             }
         }
     }
+    /**
+     * Backup All: Sequentially uploads every file where isBackedUp == false.
+     *
+     * Design decisions:
+     * - Sequential, not parallel: avoids overwhelming the server and
+     *   prevents multiple coroutines fighting over operationInProgress.
+     * - Uses a snapshot of pending files taken at invocation time so
+     *   the list doesn't shift under us as the database observer fires.
+     * - Each file's success/failure is independent — one failure doesn't
+     *   abort the batch.
+     * - Progress is reported via uiState so the UI can show "3 of 12".
+     */
+    fun backupAllFiles() {
+        viewModelScope.launch {
+            // Take a snapshot of files needing backup RIGHT NOW
+            val pendingFiles = _allFiles.value.filter { !it.isBackedUp }
+
+            if (pendingFiles.isEmpty()) {
+                _uiState.update {
+                    it.copy(successMessage = "All files are already backed up!")
+                }
+                delay(3000)
+                _uiState.update { it.copy(successMessage = null) }
+                return@launch
+            }
+
+            Timber.i("📤 Backup All started: ${pendingFiles.size} files to upload")
+            operationInProgress = true
+
+            var successCount = 0
+            var failCount = 0
+            val totalCount = pendingFiles.size
+
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    errorMessage = null,
+                    successMessage = "Backing up 0 of $totalCount files..."
+                )
+            }
+
+            for ((index, fileIndex) in pendingFiles.withIndex()) {
+                val safeDisplayName = getSafeDisplayName(fileIndex.name)
+                Timber.d("📤 Backup All [${ index + 1}/$totalCount]: $safeDisplayName")
+
+                _uiState.update {
+                    it.copy(
+                        successMessage = "Uploading ${index + 1} of $totalCount: $safeDisplayName"
+                    )
+                }
+
+                try {
+                    // Convert URI/path to a readable File
+                    val actualFile = convertUriToFile(fileIndex.path, fileIndex.name)
+                    if (actualFile == null || !actualFile.exists()) {
+                        Timber.w("⚠️ Skipping inaccessible file: $safeDisplayName")
+                        failCount++
+                        continue
+                    }
+
+                    // Collect the upload flow to completion for this single file
+                    var uploadSucceeded = false
+                    uploadFileUseCase.execute(actualFile).collect { progress ->
+                        when (progress) {
+                            is UploadProgress.Completed -> {
+                                // Persist to database
+                                val serverFileId = progress.serverId.toLongOrNull()
+                                if (serverFileId != null) {
+                                    fileRepository.updateServerFileId(fileIndex.id, serverFileId)
+                                }
+                                fileRepository.markAsBackedUp(fileIndex.id)
+
+                                // Update local state
+                                val updatedFiles = _allFiles.value.map { file ->
+                                    if (file.id == fileIndex.id) {
+                                        file.copy(
+                                            isBackedUp = true,
+                                            backedUpAt = Date(),
+                                            serverFileId = serverFileId
+                                        )
+                                    } else file
+                                }
+                                _allFiles.value = updatedFiles
+                                updateDisplayFiles(updatedFiles)
+
+                                uploadSucceeded = true
+                                Timber.i("✅ Backup All [${index + 1}/$totalCount]: $safeDisplayName completed")
+                            }
+                            is UploadProgress.Failed -> {
+                                Timber.e("❌ Backup All [${index + 1}/$totalCount]: $safeDisplayName failed — ${progress.error}")
+                            }
+                            else -> { /* Starting / Uploading — no-op for batch */ }
+                        }
+                    }
+
+                    // Clean up temp file
+                    try { actualFile.delete() } catch (_: Exception) {}
+
+                    if (uploadSucceeded) successCount++ else failCount++
+
+                } catch (e: Exception) {
+                    Timber.e(e, "❌ Backup All exception for: $safeDisplayName")
+                    failCount++
+                }
+            }
+
+            // ── Batch complete ──────────────────────────────────────────
+            operationInProgress = false
+
+            val resultMessage = when {
+                failCount == 0 -> "✅ All $successCount files backed up successfully!"
+                successCount == 0 -> "❌ Backup failed for all $failCount files."
+                else -> "✅ $successCount backed up, ❌ $failCount failed."
+            }
+
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    successMessage = resultMessage,
+                    errorMessage = null
+                )
+            }
+
+            Timber.i("📤 Backup All complete: $successCount succeeded, $failCount failed out of $totalCount")
+
+            // Refresh to sync database observer state
+            delay(2000)
+            refreshData()
+
+            // Clear message
+            delay(5000)
+            _uiState.update { it.copy(successMessage = null) }
+        }
+    }
 
     // SIMPLIFIED: Download with direct API call (no use case dependency issues)
     fun downloadSingleFile(fileIndex: FileIndex) {

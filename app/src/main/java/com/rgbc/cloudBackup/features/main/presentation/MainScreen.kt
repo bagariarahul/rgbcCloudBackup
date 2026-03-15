@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.time.delay
+import androidx.compose.material3.ButtonDefaults
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -142,6 +143,7 @@ fun MainScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Action Buttons Row
+        // Action Buttons Row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -151,12 +153,46 @@ fun MainScreen(
                     Timber.i("Refresh button clicked")
                     viewModel.refreshData()
                 },
-                enabled = !uiState.isScanning,
+                enabled = !uiState.isScanning && !uiState.isLoading,
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Refresh")
+            }
+
+            Button(
+                onClick = {
+                    Timber.i("📤 Backup All button clicked")
+                    viewModel.backupAllFiles()
+                },
+                enabled = !uiState.isScanning && !uiState.isLoading,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Icon(Icons.Default.Upload, contentDescription = "Backup All")
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Backup All")
+            }
+        }
+
+        // ── Status message banner ───────────────────────────────────
+        uiState.successMessage?.let { message ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                )
+            ) {
+                Text(
+                    text = message,
+                    modifier = Modifier.padding(12.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
             }
         }
 

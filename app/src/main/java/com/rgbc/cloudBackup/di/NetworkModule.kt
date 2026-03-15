@@ -23,17 +23,24 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
+    // ── Production domain served via Cloudflare Tunnel ──────────────────
+    // Points to your docker tunnel service: command: tunnel ... run --url http://app:3000
+    // Trailing slash is REQUIRED by Retrofit.
+    private const val PRODUCTION_URL = "https://api.bagariaa.in/"
+
+    // ── Emulator localhost for debug builds ─────────────────────────────
+    // 10.0.2.2 is the Android emulator alias for the host machine.
+    private const val DEBUG_URL = "http://10.0.2.2:3000/"
+
     @Provides
     @Named("base_url")
     fun provideBaseUrl(): String {
-        return when {
-            BuildConfig.DEBUG -> {
-                "http://10.0.2.2:3000/"
-            }
-            else -> {
-//                "https://rgbc-cloud-server-production.up.railway.app/"
-                "http://10.0.2.2:3000/"
-            }
+        return if (BuildConfig.DEBUG) {
+            Timber.d("🌐 Using DEBUG base URL: $DEBUG_URL")
+            DEBUG_URL
+        } else {
+            Timber.d("🌐 Using PRODUCTION base URL: $PRODUCTION_URL")
+            PRODUCTION_URL
         }
     }
 
@@ -67,8 +74,6 @@ object NetworkModule {
         return Interceptor { chain ->
             val original = chain.request()
 
-            // For now, let's not add auth headers automatically
-            // We'll add them manually in the API calls
             val request = original.newBuilder()
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
@@ -88,8 +93,8 @@ object NetworkModule {
             .addInterceptor(loggingInterceptor)
             .addInterceptor(authInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)   // Increased for large file uploads over cellular
+            .writeTimeout(120, TimeUnit.SECONDS)   // Increased for large file uploads over cellular
             .retryOnConnectionFailure(true)
             .build()
     }

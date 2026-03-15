@@ -3,6 +3,8 @@ package com.rgbc.cloudBackup.di
 import android.content.Context
 import androidx.room.Room
 import com.rgbc.cloudBackup.core.data.database.CloudBackupDatabase
+import com.rgbc.cloudBackup.core.data.database.DatabaseMigrations
+import com.rgbc.cloudBackup.core.data.database.entity.BackupQueueDao
 import com.rgbc.cloudBackup.core.data.database.entity.FileIndexDao
 import com.rgbc.cloudBackup.features.directory.data.BackupDirectoryDao
 import dagger.Module
@@ -24,7 +26,10 @@ object DatabaseModule {
             CloudBackupDatabase::class.java,
             "cloud_backup_database"
         )
-            .fallbackToDestructiveMigration() // TEMPORARY: Clears database on schema change
+            // Wire every migration from the unified registry
+            .addMigrations(*DatabaseMigrations.ALL_MIGRATIONS)
+            // fallbackToDestructiveMigration() is intentionally REMOVED.
+            // All schema changes MUST have a corresponding Migration object.
             .build()
     }
 
@@ -34,10 +39,15 @@ object DatabaseModule {
         return database.fileIndexDao()
     }
 
-    // ADD: BackupDirectoryDao provider
     @Provides
     @Singleton
     fun provideBackupDirectoryDao(database: CloudBackupDatabase): BackupDirectoryDao {
         return database.backupDirectoryDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideBackupQueueDao(database: CloudBackupDatabase): BackupQueueDao {
+        return database.backupQueueDao()
     }
 }
