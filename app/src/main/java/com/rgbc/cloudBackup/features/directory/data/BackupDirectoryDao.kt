@@ -19,7 +19,6 @@ interface BackupDirectoryDao {
     @Query("SELECT * FROM backup_directories WHERE uri = :uri LIMIT 1")
     suspend fun getDirectoryByUri(uri: String): BackupDirectory?
 
-    // ADD: Missing count method
     @Query("SELECT COUNT(*) FROM backup_directories WHERE uri = :uri")
     suspend fun countByUri(uri: String): Int
 
@@ -44,10 +43,13 @@ interface BackupDirectoryDao {
     @Query("DELETE FROM backup_directories WHERE path = :path")
     suspend fun deleteDirectoryByPath(path: String)
 
-    // ADD: Missing delete by URI method
     @Query("DELETE FROM backup_directories WHERE uri = :uri")
     suspend fun deleteByUri(uri: String)
 
     @Query("SELECT COUNT(*) FROM backup_directories WHERE is_enabled = 1")
     suspend fun getEnabledDirectoryCount(): Int
+
+    // NEW: Wipe all directories on logout
+    @Query("DELETE FROM backup_directories")
+    suspend fun clearAll()
 }

@@ -65,4 +65,8 @@ interface BackupQueueDao {
 
     @Query("SELECT SUM(file_size) FROM backup_queue WHERE status = 'COMPLETED'")
     suspend fun getTotalBackedUpSize(): Long?
+
+    // NEW: Wipe all queue items on logout
+    @Query("DELETE FROM backup_queue")
+    suspend fun clearAll()
 }

@@ -9,12 +9,10 @@ document-file="1.1.0"
 accompanist-permissions = "0.37.3"
 datastore = "1.1.1"
 
-
 # Compose BOM and Compiler
 compose-bom = "2025.08.01"
 compose-compiler = "1.5.14"
 compose-foundation = "1.9.1"
-
 
 # UI and Navigation
 material3 = "1.3.2"
@@ -42,6 +40,11 @@ gson = "2.13.1"
 # Security
 security-crypto = "1.1.0"
 biometric = "1.1.0"
+
+# Authentication (Phase 5)
+credentials = "1.5.0"
+google-id = "1.1.1"
+play-services-auth = "21.3.0"
 
 # Coroutines
 kotlinx-coroutines = "1.10.2"
@@ -100,6 +103,8 @@ hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt-android" }
 hilt-android-testing = { group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hilt-android" }
 androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hilt-navigation-compose" }
+androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hilt-navigation-compose" }
+androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hilt-navigation-compose" }
 dagger-core = { group = "com.google.dagger", name = "dagger", version.ref = "dagger" }
 dagger-compiler = { group = "com.google.dagger", name = "dagger-compiler", version.ref = "dagger" }
 
@@ -123,6 +128,12 @@ gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 # Security
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "security-crypto" }
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
+
+# Authentication — Credential Manager (modern) + Play Services Auth (legacy fallback)
+androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
+androidx-credentials-play = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
+google-id = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "google-id" }
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "play-services-auth" }
 
 # Coroutines
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
@@ -148,7 +159,7 @@ turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine
 androidx-arch-core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "arch-core-testing" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin-test" }
 
-androidx-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "compose-foundation"  }
+androidx-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "compose-foundation" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

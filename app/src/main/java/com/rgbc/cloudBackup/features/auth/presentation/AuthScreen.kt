@@ -1,5 +1,8 @@
 package com.rgbc.cloudBackup.features.auth.presentation
 
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -11,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -20,6 +24,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.rgbc.cloudBackup.BuildConfig
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,6 +38,32 @@ fun AuthScreen(
 ) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Activity context needed for both Credential Manager and legacy flow
+    val activityContext = LocalContext.current
+
+    // ── Legacy GoogleSignInClient setup ─────────────────────────────
+    // This is the fallback when Credential Manager throws NoCredentialException
+    val legacyGoogleSignInClient = remember {
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(BuildConfig.GOOGLE_WEB_CLIENT_ID)
+            .requestEmail()
+            .build()
+        GoogleSignIn.getClient(activityContext, gso)
+    }
+
+    // ActivityResultLauncher for the legacy Google Sign-In intent
+    val legacySignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            Timber.d("🔐 Legacy GoogleSignIn intent returned OK")
+            viewModel.handleLegacyGoogleSignInResult(result.data)
+        } else {
+            Timber.w("🔐 Legacy GoogleSignIn cancelled or failed: resultCode=${result.resultCode}")
+//            viewModel.setLoading(false)
+        }
+    }
 
     // Navigate on successful authentication
     LaunchedEffect(authState) {
@@ -57,10 +91,68 @@ fun AuthScreen(
             text = "Secure. Private. Reliable.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 48.dp)
+            modifier = Modifier.padding(bottom = 32.dp)
         )
 
-        // Auth tabs
+        // ── Google Sign-In Button (Dual-Flow) ──────────────────────
+        // Tries Credential Manager first.
+        // On failure, falls back to legacy GoogleSignInClient intent.
+        Button(
+            onClick = {
+                viewModel.signInWithGoogle(
+                    activityContext = activityContext,
+                    onCredentialManagerFailed = {
+                        // Fallback: launch legacy Google Sign-In intent
+                        Timber.d("🔐 Launching legacy GoogleSignIn intent as fallback")
+                        legacyGoogleSignInClient.signOut() // Clear stale state
+                        legacySignInLauncher.launch(legacyGoogleSignInClient.signInIntent)
+                    }
+                )
+            },
+            enabled = !uiState.isGoogleLoading &&
+                    authState !is com.rgbc.cloudBackup.core.auth.AuthState.Loading,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .height(52.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ),
+            border = ButtonDefaults.outlinedButtonBorder
+        ) {
+            if (uiState.isGoogleLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+            Text(
+                text = "Sign in with Google",
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Divider
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 24.dp)
+        ) {
+            HorizontalDivider(modifier = Modifier.weight(1f))
+            Text(
+                text = "  or  ",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            HorizontalDivider(modifier = Modifier.weight(1f))
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Auth tabs (existing email/password login)
         TabRow(selectedTabIndex = if (uiState.isLogin) 0 else 1) {
             Tab(
                 selected = uiState.isLogin,
@@ -101,7 +193,7 @@ fun AuthScreen(
             )
         }
 
-        // Error display - FIXED SMART CAST
+        // Error display
         when (val currentAuthState = authState) {
             is com.rgbc.cloudBackup.core.auth.AuthState.Error -> {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -118,65 +210,37 @@ fun AuthScreen(
                     )
                 }
             }
-            else -> { /* No error to display */ }
+            else -> {}
         }
     }
 }
 
 @Composable
 private fun LoginForm(
-    email: String,
-    password: String,
-    isLoading: Boolean,
-    onEmailChange: (String) -> Unit,
-    onPasswordChange: (String) -> Unit,
+    email: String, password: String, isLoading: Boolean,
+    onEmailChange: (String) -> Unit, onPasswordChange: (String) -> Unit,
     onLoginClick: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
-
-    Column(
-        modifier = Modifier.width(300.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    Column(modifier = Modifier.width(300.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         OutlinedTextField(
-            value = email,
-            onValueChange = onEmailChange,
-            label = { Text("Email") },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next
-            ),
-            keyboardActions = KeyboardActions(
-                onNext = { focusManager.moveFocus(FocusDirection.Down) }
-            ),
-            enabled = !isLoading,
-            modifier = Modifier.fillMaxWidth()
+            value = email, onValueChange = onEmailChange, label = { Text("Email") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+            keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+            enabled = !isLoading, modifier = Modifier.fillMaxWidth()
         )
-
         PasswordField(
-            value = password,
-            onValueChange = onPasswordChange,
-            label = "Password",
-            imeAction = ImeAction.Done,
-            onImeAction = { onLoginClick() },
-            enabled = !isLoading,
-            modifier = Modifier.fillMaxWidth()
+            value = password, onValueChange = onPasswordChange, label = "Password",
+            imeAction = ImeAction.Done, onImeAction = { onLoginClick() },
+            enabled = !isLoading, modifier = Modifier.fillMaxWidth()
         )
-
         Spacer(modifier = Modifier.height(8.dp))
-
         Button(
             onClick = onLoginClick,
             enabled = !isLoading && email.isNotBlank() && password.isNotBlank(),
             modifier = Modifier.fillMaxWidth()
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            }
+            if (isLoading) { CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(modifier = Modifier.width(8.dp)) }
             Text("Login")
         }
     }
@@ -184,99 +248,38 @@ private fun LoginForm(
 
 @Composable
 private fun RegisterForm(
-    email: String,
-    password: String,
-    firstName: String,
-    lastName: String,
-    isLoading: Boolean,
-    onEmailChange: (String) -> Unit,
-    onPasswordChange: (String) -> Unit,
-    onFirstNameChange: (String) -> Unit,
-    onLastNameChange: (String) -> Unit,
+    email: String, password: String, firstName: String, lastName: String, isLoading: Boolean,
+    onEmailChange: (String) -> Unit, onPasswordChange: (String) -> Unit,
+    onFirstNameChange: (String) -> Unit, onLastNameChange: (String) -> Unit,
     onRegisterClick: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
-
-    Column(
-        modifier = Modifier.width(300.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    Column(modifier = Modifier.width(300.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = firstName,
-                onValueChange = onFirstNameChange,
-                label = { Text("First Name") },
+            OutlinedTextField(value = firstName, onValueChange = onFirstNameChange, label = { Text("First Name") },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Right) }
-                ),
-                enabled = !isLoading,
-                modifier = Modifier.weight(1f)
-            )
-
-            OutlinedTextField(
-                value = lastName,
-                onValueChange = onLastNameChange,
-                label = { Text("Last Name") },
+                keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Right) }),
+                enabled = !isLoading, modifier = Modifier.weight(1f))
+            OutlinedTextField(value = lastName, onValueChange = onLastNameChange, label = { Text("Last Name") },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                ),
-                enabled = !isLoading,
-                modifier = Modifier.weight(1f)
-            )
+                keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+                enabled = !isLoading, modifier = Modifier.weight(1f))
         }
-
-        OutlinedTextField(
-            value = email,
-            onValueChange = onEmailChange,
-            label = { Text("Email") },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next
-            ),
-            keyboardActions = KeyboardActions(
-                onNext = { focusManager.moveFocus(FocusDirection.Down) }
-            ),
-            enabled = !isLoading,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        PasswordField(
-            value = password,
-            onValueChange = onPasswordChange,
-            label = "Password",
-            imeAction = ImeAction.Done,
-            onImeAction = { onRegisterClick() },
-            enabled = !isLoading,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Text(
-            text = "Password must contain uppercase, lowercase, number, and special character (!@#$%^&*)",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 4.dp)
-        )
-
+        OutlinedTextField(value = email, onValueChange = onEmailChange, label = { Text("Email") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+            keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+            enabled = !isLoading, modifier = Modifier.fillMaxWidth())
+        PasswordField(value = password, onValueChange = onPasswordChange, label = "Password",
+            imeAction = ImeAction.Done, onImeAction = { onRegisterClick() },
+            enabled = !isLoading, modifier = Modifier.fillMaxWidth())
+        Text(text = "Password must contain uppercase, lowercase, number, and special character (!@#\$%^&*)",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp))
         Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            onClick = onRegisterClick,
-            enabled = !isLoading &&
-                    email.isNotBlank() &&
-                    password.isNotBlank() &&
-                    firstName.isNotBlank() &&
-                    lastName.isNotBlank(),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            }
+        Button(onClick = onRegisterClick,
+            enabled = !isLoading && email.isNotBlank() && password.isNotBlank() && firstName.isNotBlank() && lastName.isNotBlank(),
+            modifier = Modifier.fillMaxWidth()) {
+            if (isLoading) { CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(modifier = Modifier.width(8.dp)) }
             Text("Create Account")
         }
     }
@@ -284,49 +287,22 @@ private fun RegisterForm(
 
 @Composable
 private fun PasswordField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    imeAction: ImeAction = ImeAction.Done,
-    onImeAction: () -> Unit = {},
-    enabled: Boolean = true,
-    modifier: Modifier = Modifier
+    value: String, onValueChange: (String) -> Unit, label: String,
+    imeAction: ImeAction = ImeAction.Done, onImeAction: () -> Unit = {},
+    enabled: Boolean = true, modifier: Modifier = Modifier
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
-
     OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        visualTransformation = if (passwordVisible) {
-            VisualTransformation.None
-        } else {
-            PasswordVisualTransformation()
-        },
-        keyboardOptions = KeyboardOptions(
-            keyboardType = KeyboardType.Password,
-            imeAction = imeAction
-        ),
-        keyboardActions = KeyboardActions(
-            onDone = { onImeAction() }
-        ),
+        value = value, onValueChange = onValueChange, label = { Text(label) },
+        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = imeAction),
+        keyboardActions = KeyboardActions(onDone = { onImeAction() }),
         trailingIcon = {
             IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                Icon(
-                    imageVector = if (passwordVisible) {
-                        Icons.Default.VisibilityOff
-                    } else {
-                        Icons.Default.Visibility
-                    },
-                    contentDescription = if (passwordVisible) {
-                        "Hide password"
-                    } else {
-                        "Show password"
-                    }
-                )
+                Icon(if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = if (passwordVisible) "Hide password" else "Show password")
             }
         },
-        enabled = enabled,
-        modifier = modifier
+        enabled = enabled, modifier = modifier
     )
 }

@@ -11,6 +11,10 @@ interface AuthApiService {
     @POST("api/auth/login")
     suspend fun login(@Body request: LoginRequest): Response<AuthResponse>
 
+    // NEW: Google OAuth login
+    @POST("api/auth/google")
+    suspend fun googleLogin(@Body request: GoogleLoginRequest): Response<AuthResponse>
+
     @POST("api/auth/logout")
     suspend fun logout(@Body request: LogoutRequest): Response<Unit>
 }
@@ -33,6 +37,14 @@ data class LoginRequest(
     val deviceId: String
 )
 
+// NEW: Google login request
+data class GoogleLoginRequest(
+    val idToken: String,
+    val deviceName: String,
+    val deviceType: String,
+    val deviceId: String
+)
+
 data class LogoutRequest(
     val sessionId: String?
 )
@@ -48,9 +60,9 @@ data class UserData(
     val email: String,
     val firstName: String,
     val lastName: String,
-    val storageQuota: String = "107374182400", // Default 100GB
-    val storageUsed: String = "0",             // Default 0
-    val createdAt: String = ""                 // Default empty
+    val storageQuota: String = "107374182400",
+    val storageUsed: String = "0",
+    val createdAt: String = ""
 )
 
 data class TokenData(

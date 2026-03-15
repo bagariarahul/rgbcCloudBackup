@@ -20,14 +20,14 @@ import timber.log.Timber
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
-    authViewModel: AuthViewModel = hiltViewModel()
+    authViewModel: AuthViewModel = hiltViewModel(),
+    settingsViewModel: SettingsViewModel = hiltViewModel()
 ) {
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
+    val settings by settingsViewModel.uiState.collectAsStateWithLifecycle()
 
-    // Mock settings state for now
-    var autoBackupEnabled by remember { mutableStateOf(true) }
-    var wifiOnlyEnabled by remember { mutableStateOf(false) }
-    var biometricEnabled by remember { mutableStateOf(false) }
+    // Interval picker dialog state
+    var showIntervalPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         Timber.d("⚙️ SettingsScreen loaded")
@@ -72,28 +72,33 @@ fun SettingsScreen(
                 )
             }
 
-            // Backup Section
+            // ── Backup Section (WIRED TO DATASTORE) ─────────────────
             item {
                 SettingsSection(
                     title = "Backup",
                     items = listOf(
                         SettingsItem.Toggle(
-                            title = "Auto Backup",
-                            subtitle = "Automatically backup new files",
-                            enabled = autoBackupEnabled,
-                            onToggle = {
-                                autoBackupEnabled = it
-                                Timber.d("🔄 Auto backup ${if (it) "enabled" else "disabled"}")
-                            }
+                            title = "Background Backups",
+                            subtitle = if (settings.autoBackupEnabled)
+                                "Running every ${formatInterval(settings.backupIntervalHours)}"
+                            else
+                                "Disabled — files only upload manually",
+                            enabled = settings.autoBackupEnabled,
+                            onToggle = { settingsViewModel.setAutoBackupEnabled(it) }
+                        ),
+                        SettingsItem.Action(
+                            title = "Backup Interval",
+                            subtitle = "Every ${formatInterval(settings.backupIntervalHours)}",
+                            action = { showIntervalPicker = true }
                         ),
                         SettingsItem.Toggle(
-                            title = "WiFi Only",
-                            subtitle = "Only backup when connected to WiFi",
-                            enabled = wifiOnlyEnabled,
-                            onToggle = {
-                                wifiOnlyEnabled = it
-                                Timber.d("📶 WiFi only backup ${if (it) "enabled" else "disabled"}")
-                            }
+                            title = "Wi-Fi Only",
+                            subtitle = if (settings.wifiOnly)
+                                "Backups pause on mobile data"
+                            else
+                                "Backups run on any network",
+                            enabled = settings.wifiOnly,
+                            onToggle = { settingsViewModel.setWifiOnly(it) }
                         )
                     )
                 )
@@ -113,7 +118,6 @@ fun SettingsScreen(
                             subtitle = "Clear temporary files and thumbnails",
                             action = {
                                 Timber.i("🧹 Clear cache requested")
-                                // TODO: Implement cache clearing
                             }
                         )
                     )
@@ -126,13 +130,16 @@ fun SettingsScreen(
                     title = "Security",
                     items = listOf(
                         SettingsItem.Toggle(
-                            title = "Biometric Lock",
-                            subtitle = "Require fingerprint or face unlock",
-                            enabled = biometricEnabled,
-                            onToggle = {
-                                biometricEnabled = it
-                                Timber.d("🔐 Biometric lock ${if (it) "enabled" else "disabled"}")
-                            }
+                            title = "Encryption",
+                            subtitle = "Encrypt files before upload",
+                            enabled = settings.encryptionEnabled,
+                            onToggle = { settingsViewModel.setEncryptionEnabled(it) }
+                        ),
+                        SettingsItem.Toggle(
+                            title = "Compression",
+                            subtitle = "Compress files to save bandwidth",
+                            enabled = settings.compressionEnabled,
+                            onToggle = { settingsViewModel.setCompressionEnabled(it) }
                         )
                     )
                 )
@@ -150,25 +157,82 @@ fun SettingsScreen(
                         SettingsItem.Action(
                             title = "Privacy Policy",
                             subtitle = "View our privacy policy",
-                            action = {
-                                Timber.d("📄 Privacy policy requested")
-                                // TODO: Open privacy policy
-                            }
+                            action = { Timber.d("📄 Privacy policy requested") }
                         ),
                         SettingsItem.Action(
                             title = "Terms of Service",
                             subtitle = "View terms and conditions",
-                            action = {
-                                Timber.d("📋 Terms of service requested")
-                                // TODO: Open terms
-                            }
+                            action = { Timber.d("📋 Terms of service requested") }
                         )
                     )
                 )
             }
         }
     }
+
+    // ── Interval Picker Dialog ──────────────────────────────────────────
+    if (showIntervalPicker) {
+        IntervalPickerDialog(
+            currentHours = settings.backupIntervalHours,
+            onSelect = { hours ->
+                settingsViewModel.setBackupInterval(hours)
+                showIntervalPicker = false
+            },
+            onDismiss = { showIntervalPicker = false }
+        )
+    }
 }
+
+// ── Interval Picker ─────────────────────────────────────────────────────
+
+@Composable
+fun IntervalPickerDialog(
+    currentHours: Long,
+    onSelect: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val options = listOf(1L, 3L, 6L, 12L, 24L)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Backup Interval") },
+        text = {
+            Column {
+                options.forEach { hours ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(hours) }
+                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = hours == currentHours,
+                            onClick = { onSelect(hours) }
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = formatInterval(hours),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+fun formatInterval(hours: Long): String = when (hours) {
+    1L -> "1 hour"
+    else -> "$hours hours"
+}
+
+// ── Existing Composable Helpers (unchanged) ─────────────────────────────
 
 @Composable
 fun SettingsSection(

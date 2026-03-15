@@ -1,14 +1,16 @@
 package com.rgbc.cloudBackup.di
 
+import android.content.Context
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.rgbc.cloudBackup.BuildConfig
-import com.rgbc.cloudBackup.core.auth.AuthManager
 import com.rgbc.cloudBackup.core.network.api.AuthApiService
 import com.rgbc.cloudBackup.core.network.api.BackupApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -23,13 +25,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    // ── Production domain served via Cloudflare Tunnel ──────────────────
-    // Points to your docker tunnel service: command: tunnel ... run --url http://app:3000
-    // Trailing slash is REQUIRED by Retrofit.
     private const val PRODUCTION_URL = "https://api.bagariaa.in/"
-
-    // ── Emulator localhost for debug builds ─────────────────────────────
-    // 10.0.2.2 is the Android emulator alias for the host machine.
     private const val DEBUG_URL = "http://10.0.2.2:3000/"
 
     @Provides
@@ -49,37 +45,69 @@ object NetworkModule {
     fun provideHttpLoggingInterceptor(): HttpLoggingInterceptor {
         return HttpLoggingInterceptor { message ->
             when {
-                message.contains("Authorization", ignoreCase = true) -> {
+                message.contains("Authorization", ignoreCase = true) ->
                     Timber.d("Authorization: [REDACTED]")
-                }
-                message.contains("Bearer", ignoreCase = true) -> {
+                message.contains("Bearer", ignoreCase = true) ->
                     Timber.d("Bearer [REDACTED]")
-                }
-                else -> {
-                    Timber.d(message)
-                }
+                else -> Timber.d(message)
             }
         }.apply {
-            level = if (BuildConfig.DEBUG) {
+            level = if (BuildConfig.DEBUG)
                 HttpLoggingInterceptor.Level.BODY
-            } else {
+            else
                 HttpLoggingInterceptor.Level.NONE
-            }
         }
     }
 
+    // ════════════════════════════════════════════════════════════════════
+    // Auth interceptor — reads JWT from EncryptedSharedPreferences and
+    // attaches it as a Bearer token to every request.
+    //
+    // Reads from prefs directly (not AuthManager) to avoid circular DI:
+    // Interceptor → AuthManager → AuthApiService → Retrofit → OkHttpClient → Interceptor
+    //
+    // The "auth_prefs" name and MasterKey config match AuthManager exactly.
+    // ════════════════════════════════════════════════════════════════════
     @Provides
     @Singleton
-    fun provideAuthInterceptor(): Interceptor {
+    fun provideAuthInterceptor(
+        @ApplicationContext context: Context
+    ): Interceptor {
+        val authPrefs by lazy {
+            try {
+                val masterKey = MasterKey.Builder(context)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build()
+                EncryptedSharedPreferences.create(
+                    context,
+                    "auth_prefs",
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to open encrypted prefs in interceptor")
+                context.getSharedPreferences("auth_prefs_fallback", Context.MODE_PRIVATE)
+            }
+        }
+
         return Interceptor { chain ->
             val original = chain.request()
-
-            val request = original.newBuilder()
-                .header("Content-Type", "application/json")
+            val requestBuilder = original.newBuilder()
                 .header("Accept", "application/json")
-                .build()
 
-            chain.proceed(request)
+            // Don't override Content-Type for multipart uploads
+            if (original.body?.contentType()?.type != "multipart") {
+                requestBuilder.header("Content-Type", "application/json")
+            }
+
+            // Attach Bearer token if available
+            val token = authPrefs.getString("access_token", null)
+            if (!token.isNullOrEmpty()) {
+                requestBuilder.header("Authorization", "Bearer $token")
+            }
+
+            chain.proceed(requestBuilder.build())
         }
     }
 
@@ -90,11 +118,11 @@ object NetworkModule {
         authInterceptor: Interceptor
     ): OkHttpClient {
         return OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
             .addInterceptor(authInterceptor)
+            .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)   // Increased for large file uploads over cellular
-            .writeTimeout(120, TimeUnit.SECONDS)   // Increased for large file uploads over cellular
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build()
     }

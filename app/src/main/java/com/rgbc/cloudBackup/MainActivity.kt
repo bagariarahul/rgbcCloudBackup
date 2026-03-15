@@ -40,8 +40,7 @@ import com.rgbc.cloudBackup.features.directory.presentation.DirectoryViewModel
 import com.rgbc.cloudBackup.features.files.presentation.FilesScreen
 import com.rgbc.cloudBackup.features.main.presentation.MainViewModel
 import com.rgbc.cloudBackup.features.settings.presentation.SettingsScreen
-//import com.rgbc.cloudBackup.features.sync.presentation.ServerSyncScreen
-
+import com.rgbc.cloudBackup.features.sync.presentation.ServerInfoScreen
 
 
 
@@ -155,8 +154,8 @@ fun CloudBackupApp() {
                     }
 
                     composable(Screen.ServerSync.route) {
-                        Timber.d("🌐 Navigated to Server Sync screen")
-//                        ServerSyncScreen()
+                        Timber.d("🌐 Navigated to Server Info screen")
+                        ServerInfoScreen()
                     }
 
 

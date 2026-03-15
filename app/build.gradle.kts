@@ -1,9 +1,9 @@
-@Suppress("DSL_SCOPE_VIOLATION") // if using Gradle < 8.1
+@Suppress("DSL_SCOPE_VIOLATION")
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)     // 💡 **Compose compiler plugin (Kotlin 2.0+)**
-    alias(libs.plugins.kotlin.parcelize)   // optional, if using `@Parcelize`
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.hilt.android)
 }
@@ -20,6 +20,13 @@ android {
         versionName = "1.0"
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner = "com.rgbc.cloudBackup.HiltTestRunner"
+
+        // Google OAuth — Web Client ID (must match backend GOOGLE_CLIENT_ID)
+        buildConfigField(
+            "String",
+            "GOOGLE_WEB_CLIENT_ID",
+            "\"890382764760-ur0ds295jh2oetilsig0dlcnj28unrl9.apps.googleusercontent.com\""
+        )
     }
 
     buildTypes {
@@ -74,8 +81,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
 
-    // Compose BOM + UI libraries
-    implementation(platform(libs.androidx.compose.bom))              // Maps to Compose 1.6.x etc :contentReference[oaicite:8]{index=8}
+    // Compose BOM + UI
+    implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
@@ -84,13 +91,15 @@ dependencies {
     implementation(libs.google.material)
     implementation(libs.androidx.lifecycle.runtime.compose)
 
-    // Navigation & Hilt in Compose
+    // Navigation & Hilt
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.hilt.navigation.compose)
-
-    // Dependency Injection
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
+
+    // Hilt WorkManager (Phase 3)
+    implementation(libs.androidx.hilt.work)
+    kapt(libs.androidx.hilt.compiler)
 
     // Room & SQLCipher
     implementation(libs.androidx.room.runtime)
@@ -100,7 +109,6 @@ dependencies {
     kapt(libs.androidx.room.compiler)
     implementation(libs.datastore.preferences)
     implementation(libs.datastore.core)
-
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
@@ -116,6 +124,12 @@ dependencies {
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.biometric)
 
+    // Google Sign-In — Credential Manager (modern) + Play Services Auth (legacy fallback)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play)
+    implementation(libs.google.id)
+    implementation(libs.play.services.auth)  // Legacy fallback for emulators/older devices
+
     // Coroutines
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
@@ -124,7 +138,7 @@ dependencies {
     implementation(libs.timber)
     debugImplementation(libs.leakcanary.android)
 
-    // Unit Test dependencies
+    // Unit Tests
     testImplementation(libs.junit)
     testImplementation(libs.androidx.junit)
     testImplementation(libs.mockito.core)
@@ -132,46 +146,31 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.androidx.room.testing)
     testImplementation(libs.androidx.work.testing)
-    testImplementation(libs.hilt.android.testing)         // Hilt for Robolectric/UI unit tests :contentReference[oaicite:9]{index=9}
+    testImplementation(libs.hilt.android.testing)
     kaptTest(libs.hilt.compiler)
 
-    // Android Instrumented/UI Tests
+    // Instrumented Tests
     androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)       // Compose UI tests :contentReference[oaicite:10]{index=10}
-    debugImplementation(libs.androidx.ui.test.manifest)        // debug-only manifest provider :contentReference[oaicite:11]{index=11}
-
-    androidTestImplementation(libs.androidx.test.runner)                   // Needed for Hilt runner
-    androidTestImplementation(libs.hilt.android.testing)                 // Hilt injection in Android tests :contentReference[oaicite:12]{index=12}
+    androidTestImplementation(libs.androidx.ui.test.junit4)
+    debugImplementation(libs.androidx.ui.test.manifest)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.hilt.android.testing)
     kaptAndroidTest(libs.hilt.compiler)
-
-    // Remember: Espresso Core belongs in androidTest, NOT testImplementation
     androidTestImplementation(libs.espresso.core)
 
     implementation(libs.dagger.core)
     kapt(libs.dagger.compiler)
 
-    // Unit tests
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.arch.core.testing)
-
-    // Instrumented tests
     androidTestImplementation(libs.kotlin.test)
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.arch.core.testing)
-    // Unit test dependencies (these work)
-    testImplementation(libs.mockito.core)
-    testImplementation(libs.mockito.kotlin)
-
-    // ADD THESE for Android instrumented tests
     androidTestImplementation(libs.mockito.core)
     androidTestImplementation(libs.mockito.kotlin)
+
     implementation(libs.document.file)
     implementation(libs.accompanist.permissions)
-
     implementation(libs.androidx.foundation)
-
-
-
 }
-

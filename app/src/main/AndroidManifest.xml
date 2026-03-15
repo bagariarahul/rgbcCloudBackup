@@ -56,6 +56,24 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!--
+            CRITICAL: Remove WorkManager's default ContentProvider initializer.
+            Because CloudBackupApplication implements Configuration.Provider,
+            WorkManager must be initialized by our custom configuration (which
+            uses HiltWorkerFactory). Without this removal, WorkManager would
+            double-initialize and crash.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
     </application>
 
 </manifest>

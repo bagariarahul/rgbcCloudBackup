@@ -75,7 +75,46 @@ class AuthManager @Inject constructor(
         }
     }
 
-    // REMOVED: testConnection() method to fix compilation error
+    // ════════════════════════════════════════════════════════════════════
+    // NEW: Google OAuth login
+    //
+    // Sends the Google ID token to our backend, which verifies it with
+    // Google's API, checks the admin email gate, and returns a JWT.
+    // ════════════════════════════════════════════════════════════════════
+    suspend fun loginWithGoogle(googleIdToken: String): AuthResult {
+        return try {
+            Timber.d("🔐 Starting Google login")
+            _authState.value = AuthState.Loading
+
+            val request = GoogleLoginRequest(
+                idToken = googleIdToken,
+                deviceName = deviceName,
+                deviceType = "ANDROID",
+                deviceId = deviceId
+            )
+
+            val response = authApiService.googleLogin(request)
+
+            if (response.isSuccessful && response.body() != null) {
+                val authResponse = response.body()!!
+                saveAuthData(authResponse)
+                _authState.value = AuthState.Authenticated(authResponse.user)
+                Timber.i("🔐 Google login successful: ${authResponse.user.email}")
+                AuthResult.Success(authResponse.user)
+            } else {
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                val error = "Google login failed (${response.code()}): $errorBody"
+                Timber.w("🔐 $error")
+                _authState.value = AuthState.Error(error)
+                AuthResult.Error(error)
+            }
+        } catch (e: Exception) {
+            val error = "Google login failed: ${e.message}"
+            Timber.e(e, "🔐 Google login exception")
+            _authState.value = AuthState.Error(error)
+            AuthResult.Error(error)
+        }
+    }
 
     suspend fun register(
         email: String,
@@ -189,9 +228,9 @@ class AuthManager @Inject constructor(
             email = encryptedPrefs.getString("user_email", "") ?: "",
             firstName = encryptedPrefs.getString("user_firstname", "") ?: "",
             lastName = encryptedPrefs.getString("user_lastname", "") ?: "",
-            storageQuota = "107374182400", // FIXED: Provide default value
-            storageUsed = "0",             // FIXED: Provide default value
-            createdAt = ""                 // FIXED: Provide default value
+            storageQuota = "107374182400",
+            storageUsed = "0",
+            createdAt = ""
         )
     }
 

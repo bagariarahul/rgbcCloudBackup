@@ -5,11 +5,30 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
+import com.rgbc.cloudBackup.core.service.BackupScheduler
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
+import javax.inject.Inject
 
 @HiltAndroidApp
-class CloudBackupApplication : Application() {
+class CloudBackupApplication : Application(), Configuration.Provider {
+
+    // ── Hilt WorkManager integration ────────────────────────────────────
+    // HiltWorkerFactory creates Worker instances with @AssistedInject
+    // dependencies. This is injected by Hilt automatically.
+    @Inject
+    lateinit var workerFactory: HiltWorkerFactory
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .setMinimumLoggingLevel(
+                if (BuildConfig.DEBUG) android.util.Log.DEBUG
+                else android.util.Log.INFO
+            )
+            .build()
 
     override fun onCreate() {
         super.onCreate()
@@ -20,10 +39,15 @@ class CloudBackupApplication : Application() {
         // Initialize Timber logger
         initializeLogging()
 
-        // 🆕 ADD: Create notification channels
+        // Create notification channels (required for Android 8.0+)
         createNotificationChannels()
 
-        Timber.i("CloudBackup Application started with notification channels")
+        // ── Schedule periodic backup worker ─────────────────────────────
+        // Safe to call on every launch — KEEP policy means it won't
+        // duplicate an already-enqueued worker.
+        BackupScheduler.schedulePeriodic(this, intervalHours = 1)
+
+        Timber.i("CloudBackup Application started with WorkManager backup scheduler")
     }
 
     private fun initializeSQLCipher() {
@@ -42,7 +66,7 @@ class CloudBackupApplication : Application() {
         }
     }
 
-    // 🆕 ADD: Create notification channels for Android 8.0+
+    // Create notification channels for Android 8.0+
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {

@@ -33,6 +33,10 @@ interface BackupApiService {
         @Query("user") user: String,
         @Query("file") file: String
     ): Response<ResponseBody>
+
+    // NEW: Server Info
+    @GET("api/server-info")
+    suspend fun getServerInfo(): Response<ServerInfoResponse>
 }
 
 // --- Response Data Classes ---
@@ -43,18 +47,11 @@ data class FileUploadResponse(
 )
 
 data class UploadedFile(
-    // 1. CHANGE THIS TO STRING. The server uses the filename (e.g., "123_image.jpg") as the ID.
     val id: String,
-
     val originalName: String,
-
-    // 2. Maps JSON "fileName" to this field
     @SerializedName("fileName")
     val filename: String,
-
-    // 3. Server sends "size", matches this variable name (No annotation needed if names match)
     val size: Long,
-
     val mimetype: String?
 )
 
@@ -64,10 +61,52 @@ data class FileListResponse(
 )
 
 data class RemoteFile(
-    // Ensure ID is String here too
     val id: String,
     val originalName: String,
     @SerializedName("fileSize")
     val fileSize: Long,
     val uploadedAt: String?
+)
+
+// NEW: Server Info Response
+data class ServerInfoResponse(
+    val status: String,
+    val uptime: UptimeInfo,
+    val os: OsInfo,
+    val memory: ResourceInfo,
+    val disk: DiskInfo,
+    val node: NodeInfo,
+    val timestamp: String
+)
+
+data class UptimeInfo(
+    val seconds: Long,
+    val formatted: String
+)
+
+data class OsInfo(
+    val type: String,
+    val platform: String,
+    val release: String,
+    val arch: String,
+    val hostname: String
+)
+
+data class ResourceInfo(
+    val total: Long,
+    val free: Long,
+    val used: Long,
+    val usedPercent: Int
+)
+
+data class DiskInfo(
+    val total: Long,
+    val free: Long,
+    val used: Long,
+    val usedPercent: Int
+)
+
+data class NodeInfo(
+    val version: String,
+    val env: String
 )
