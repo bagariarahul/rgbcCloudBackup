@@ -303,6 +303,7 @@ private fun PasswordField(
                     contentDescription = if (passwordVisible) "Hide password" else "Show password")
             }
         },
-        enabled = enabled, modifier = modifier
+        enabled = enabled,
+        modifier = modifier
     )
 }

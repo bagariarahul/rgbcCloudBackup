@@ -1,5 +1,7 @@
 package com.rgbc.cloudBackup.features.sync.presentation
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -70,7 +72,8 @@ fun ServerInfoScreen(
                 }
             }
 
-            uiState.error != null -> {
+            // Show error only when no cached data available
+            uiState.error != null && uiState.serverInfo == null -> {
                 ErrorCard(
                     error = uiState.error!!,
                     onRetry = { viewModel.fetchServerInfo() }
@@ -78,23 +81,72 @@ fun ServerInfoScreen(
             }
 
             uiState.serverInfo != null -> {
-                ServerInfoContent(info = uiState.serverInfo!!)
+                // Sprint 2.5: Show offline banner if using cached data
+                if (uiState.isCachedData) {
+                    OfflineBanner(lastFetchedAt = uiState.lastFetchedAt)
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+                ServerInfoContent(info = uiState.serverInfo!!, isCached = uiState.isCachedData)
+            }
+        }
+    }
+}
+
+// ── Offline Banner ──────────────────────────────────────────────────────
+
+@RequiresApi(Build.VERSION_CODES.O)
+@Composable
+private fun OfflineBanner(lastFetchedAt: String?) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.CloudOff,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.size(24.dp)
+            )
+            Column {
+                Text(
+                    text = "Offline — Showing Cached Data",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                if (lastFetchedAt != null) {
+                    Text(
+                        text = "Last seen: ${formatTimestamp(lastFetchedAt)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ServerInfoContent(info: ServerInfoResponse) {
+private fun ServerInfoContent(info: ServerInfoResponse, isCached: Boolean = false) {
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // ── Status Banner ───────────────────────────────────────
         item {
+            val isOnline = info.status == "online" && !isCached
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (info.status == "online")
+                    containerColor = if (isOnline)
                         MaterialTheme.colorScheme.primaryContainer
                     else
                         MaterialTheme.colorScheme.errorContainer
@@ -108,18 +160,18 @@ private fun ServerInfoContent(info: ServerInfoResponse) {
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Icon(
-                        imageVector = if (info.status == "online")
+                        imageVector = if (isOnline)
                             Icons.Default.CheckCircle else Icons.Default.Error,
                         contentDescription = null,
                         modifier = Modifier.size(40.dp),
-                        tint = if (info.status == "online")
+                        tint = if (isOnline)
                             MaterialTheme.colorScheme.primary
                         else
                             MaterialTheme.colorScheme.error
                     )
                     Column {
                         Text(
-                            text = if (info.status == "online") "Server Online" else "Server Offline",
+                            text = if (isOnline) "Server Online" else "Server Offline",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -139,7 +191,10 @@ private fun ServerInfoContent(info: ServerInfoResponse) {
                 InfoRow(icon = Icons.Default.Computer, label = "OS", value = "${info.os.type} ${info.os.arch}")
                 InfoRow(icon = Icons.Default.Memory, label = "Kernel", value = info.os.release)
                 InfoRow(icon = Icons.Default.Dns, label = "Hostname", value = info.os.hostname)
-                InfoRow(icon = Icons.Default.Code, label = "Node.js", value = "${info.node.version} (${info.node.env})")
+                // FIX: null-safe access to info.node (was crashing when node was null or a string)
+                val nodeVersion = info.node?.version ?: "Unknown"
+                val nodeEnv = info.node?.env ?: "unknown"
+                InfoRow(icon = Icons.Default.Code, label = "Runtime", value = "$nodeVersion ($nodeEnv)")
             }
         }
 
@@ -266,7 +321,6 @@ private fun UsageSection(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Progress bar
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
@@ -350,5 +404,24 @@ private fun formatBytes(bytes: Long): String {
         bytes >= 1_048_576L -> String.format("%.1f MB", bytes / 1_048_576.0)
         bytes >= 1_024L -> String.format("%.1f KB", bytes / 1_024.0)
         else -> "$bytes B"
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+private fun formatTimestamp(isoTimestamp: String): String {
+    return try {
+        // Parse ISO 8601 timestamp and format as relative time
+        val instant = java.time.Instant.parse(isoTimestamp)
+        val now = java.time.Instant.now()
+        val seconds = java.time.Duration.between(instant, now).seconds
+
+        when {
+            seconds < 60 -> "${seconds}s ago"
+            seconds < 3600 -> "${seconds / 60}m ago"
+            seconds < 86400 -> "${seconds / 3600}h ago"
+            else -> "${seconds / 86400}d ago"
+        }
+    } catch (e: Exception) {
+        isoTimestamp // Fallback: show raw timestamp
     }
 }

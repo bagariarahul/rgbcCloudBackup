@@ -23,6 +23,8 @@ import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Date
+import android.content.pm.ServiceInfo
+import android.os.Build
 
 /**
  * BackupWorker — runs periodic background backups via WorkManager.
@@ -206,6 +208,15 @@ class BackupWorker @AssistedInject constructor(
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
 
-        return ForegroundInfo(NOTIFICATION_ID, notification)
+        // 🔧 FIX: Android 14+ strictly requires the Service Type to be passed here
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        } else {
+            ForegroundInfo(NOTIFICATION_ID, notification)
+        }
     }
 }

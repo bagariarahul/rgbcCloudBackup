@@ -51,6 +51,11 @@
         </activity>
 
         <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
+        <service
             android:name=".core.service.AutoBackupService"
             android:enabled="true"
             android:exported="false"
