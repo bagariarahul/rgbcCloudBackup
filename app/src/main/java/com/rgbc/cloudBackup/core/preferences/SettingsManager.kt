@@ -29,6 +29,8 @@ class SettingsManager @Inject constructor(
         val COMPRESSION_ENABLED = booleanPreferencesKey("compression_enabled")
         val ENCRYPTION_ENABLED = booleanPreferencesKey("encryption_enabled")
         val BACKUP_INTERVAL_HOURS = longPreferencesKey("backup_interval_hours")
+        // Sprint 2.5: Pull sync from Master
+        val PULL_SYNC_ENABLED = booleanPreferencesKey("pull_sync_enabled")
     }
 
     suspend fun clearAll() {
@@ -69,6 +71,10 @@ class SettingsManager @Inject constructor(
     val retryFailedUploads: Flow<Boolean> = context.dataStore.data.map { it[RETRY_FAILED_UPLOADS] ?: true }
     suspend fun setRetryFailedUploads(enabled: Boolean) { context.dataStore.edit { it[RETRY_FAILED_UPLOADS] = enabled } }
 
+    // Sprint 2.5: Pull sync toggle
+    val pullSyncEnabled: Flow<Boolean> = context.dataStore.data.map { it[PULL_SYNC_ENABLED] ?: true }
+    suspend fun setPullSyncEnabled(enabled: Boolean) { context.dataStore.edit { it[PULL_SYNC_ENABLED] = enabled } }
+
     private fun getDefaultDownloadPath(): String = try {
         context.getExternalFilesDir("Downloads")?.absolutePath ?: "${context.filesDir}/Downloads"
     } catch (e: Exception) { "${context.filesDir}/Downloads" }
@@ -78,5 +84,5 @@ data class BackupSettings(
     val downloadPath: String, val autoBackupEnabled: Boolean, val backupOnWifiOnly: Boolean,
     val backupOnCharging: Boolean, val maxConcurrentUploads: Int, val maxFileSizeMB: Int,
     val encryptionEnabled: Boolean, val compressionEnabled: Boolean, val retryFailedUploads: Boolean,
-    val backupIntervalHours: Long = 1L
+    val backupIntervalHours: Long = 1L, val pullSyncEnabled: Boolean = true
 )

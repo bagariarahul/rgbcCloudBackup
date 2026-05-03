@@ -20,6 +20,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rgbc.cloudBackup.core.network.api.ServerInfoResponse
 import timber.log.Timber
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun ServerInfoScreen(
     modifier: Modifier = Modifier,

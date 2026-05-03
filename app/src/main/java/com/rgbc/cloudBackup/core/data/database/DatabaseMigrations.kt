@@ -7,10 +7,13 @@ import timber.log.Timber
 /**
  * Database migrations for schema changes.
  *
- * History: Migrations 1→4 were written but never executed in production
- * because fallbackToDestructiveMigration() was active. They are preserved
- * for completeness but the only migration path that matters for existing
- * users is 5→6.
+ * History:
+ *   1→2: Added lastAttemptedAt, errorMessage
+ *   2→3: Added fileType, mimeType
+ *   3→4: Added shouldBackup/isBackedUp indexes
+ *   4→5: Created backup_directories table
+ *   5→6: Created backup_queue table + serverFileId column
+ *   6→7: Added syncDirection column (Sprint 2.5 — P2P pull sync)
  */
 object DatabaseMigrations {
 
@@ -38,11 +41,8 @@ object DatabaseMigrations {
         }
     }
 
-    // ── Migration 4→5: Moved here from CloudBackupDatabase.kt ──────────
     val MIGRATION_4_5 = object : Migration(4, 5) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            // Create the backup_directories table fresh (v4 had a different
-            // table named "BackupDirectory" with an incompatible schema).
             db.execSQL("DROP TABLE IF EXISTS BackupDirectory")
             db.execSQL(
                 """
@@ -64,13 +64,10 @@ object DatabaseMigrations {
         }
     }
 
-    // ── Migration 5→6: Adds BackupQueue table + serverFileId column ─────
     val MIGRATION_5_6 = object : Migration(5, 6) {
         override fun migrate(db: SupportSQLiteDatabase) {
             Timber.i("Running MIGRATION_5_6: Adding backup_queue table and serverFileId column")
 
-            // 1. Safely add serverFileId to file_index (may already exist
-            //    on devices where the entity was updated before this migration).
             val cursor = db.query("PRAGMA table_info(file_index)")
             val columnNames = mutableListOf<String>()
             val nameIdx = cursor.getColumnIndex("name")
@@ -83,7 +80,6 @@ object DatabaseMigrations {
                 db.execSQL("ALTER TABLE file_index ADD COLUMN serverFileId INTEGER DEFAULT NULL")
             }
 
-            // 2. Create the backup_queue table
             db.execSQL(
                 """
                 CREATE TABLE IF NOT EXISTS backup_queue (
@@ -110,8 +106,6 @@ object DatabaseMigrations {
             db.execSQL("CREATE INDEX IF NOT EXISTS index_backup_queue_priority_created_at ON backup_queue(priority, created_at)")
             db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_backup_queue_file_path ON backup_queue(file_path)")
 
-            // 3. Ensure backup_directories table exists (safety net for
-            //    devices that somehow skipped 4→5).
             db.execSQL(
                 """
                 CREATE TABLE IF NOT EXISTS backup_directories (
@@ -134,15 +128,48 @@ object DatabaseMigrations {
         }
     }
 
-    /**
-     * All migrations in order. Wire this into Room.databaseBuilder via
-     * .addMigrations(*DatabaseMigrations.ALL_MIGRATIONS)
-     */
+    // ═══════════════════════════════════════════════════════════════════
+    // Sprint 2.5: Add syncDirection column for P2P bidirectional sync
+    //
+    // This column prevents pulled files from being re-uploaded:
+    //   "PUSH" = file originated on this device → upload to Master
+    //   "PULL" = file downloaded from Master → do NOT re-upload
+    //
+    // All existing rows get "PUSH" (they were all local files before P2P).
+    // ═══════════════════════════════════════════════════════════════════
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            Timber.i("Running MIGRATION_6_7: Adding syncDirection column for P2P pull sync")
+
+            // Safe add: check if column already exists (defensive)
+            val cursor = db.query("PRAGMA table_info(file_index)")
+            val columnNames = mutableListOf<String>()
+            val nameIdx = cursor.getColumnIndex("name")
+            while (cursor.moveToNext()) {
+                if (nameIdx >= 0) columnNames.add(cursor.getString(nameIdx))
+            }
+            cursor.close()
+
+            if ("syncDirection" !in columnNames) {
+                db.execSQL("ALTER TABLE file_index ADD COLUMN syncDirection TEXT NOT NULL DEFAULT 'PUSH'")
+                Timber.i("  Added syncDirection column with default 'PUSH'")
+            } else {
+                Timber.i("  syncDirection column already exists, skipping")
+            }
+
+            // Add index for fast filtering in getFilesToBackup()
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_file_index_syncDirection ON file_index(syncDirection)")
+
+            Timber.i("MIGRATION_6_7 complete")
+        }
+    }
+
     val ALL_MIGRATIONS = arrayOf(
         MIGRATION_1_2,
         MIGRATION_2_3,
         MIGRATION_3_4,
         MIGRATION_4_5,
-        MIGRATION_5_6
+        MIGRATION_5_6,
+        MIGRATION_6_7
     )
 }

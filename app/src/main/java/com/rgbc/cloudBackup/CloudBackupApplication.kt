@@ -8,6 +8,7 @@ import android.os.Build
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.rgbc.cloudBackup.core.service.BackupScheduler
+import com.rgbc.cloudBackup.core.service.SyncPullScheduler
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
 import javax.inject.Inject
@@ -15,9 +16,6 @@ import javax.inject.Inject
 @HiltAndroidApp
 class CloudBackupApplication : Application(), Configuration.Provider {
 
-    // ── Hilt WorkManager integration ────────────────────────────────────
-    // HiltWorkerFactory creates Worker instances with @AssistedInject
-    // dependencies. This is injected by Hilt automatically.
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
@@ -42,12 +40,17 @@ class CloudBackupApplication : Application(), Configuration.Provider {
         // Create notification channels (required for Android 8.0+)
         createNotificationChannels()
 
-        // ── Schedule periodic backup worker ─────────────────────────────
-        // Safe to call on every launch — KEEP policy means it won't
-        // duplicate an already-enqueued worker.
+        // ── Schedule periodic backup worker (Push) ───────────────────
+        // Safe to call on every launch — UPDATE policy handles changes.
         BackupScheduler.schedulePeriodic(this, intervalHours = 1)
 
-        Timber.i("CloudBackup Application started with WorkManager backup scheduler")
+        // ── Sprint 2.5: Schedule periodic pull sync worker ───────────
+        // Checks the Master Node for new files every 15 minutes.
+        // If pull sync is disabled in Settings, SettingsViewModel
+        // will cancel this worker — but we start it by default.
+        SyncPullScheduler.schedulePeriodic(this, intervalMinutes = 15)
+
+        Timber.i("CloudBackup Application started with Push + Pull sync schedulers")
     }
 
     private fun initializeSQLCipher() {
@@ -66,11 +69,9 @@ class CloudBackupApplication : Application(), Configuration.Provider {
         }
     }
 
-    // Create notification channels for Android 8.0+
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
-                // Auto backup ongoing notification channel
                 val backupChannel = NotificationChannel(
                     "backup_channel",
                     "Auto Backup Service",
@@ -80,7 +81,6 @@ class CloudBackupApplication : Application(), Configuration.Provider {
                     setShowBadge(false)
                 }
 
-                // Backup completion notification channel
                 val resultChannel = NotificationChannel(
                     "backup_result_channel",
                     "Backup Results",
@@ -90,18 +90,14 @@ class CloudBackupApplication : Application(), Configuration.Provider {
                     setShowBadge(true)
                 }
 
-                // Create the channels
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 notificationManager.createNotificationChannel(backupChannel)
                 notificationManager.createNotificationChannel(resultChannel)
 
-                Timber.d("📢 Notification channels created successfully")
-
+                Timber.d("Notification channels created successfully")
             } catch (e: Exception) {
-                Timber.e(e, "❌ Failed to create notification channels")
+                Timber.e(e, "Failed to create notification channels")
             }
-        } else {
-            Timber.d("📢 Notification channels not needed (Android < 8.0)")
         }
     }
 }

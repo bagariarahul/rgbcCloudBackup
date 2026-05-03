@@ -7,11 +7,18 @@ import java.util.Date
 @Dao
 interface FileIndexDao {
 
-    // Existing methods...
     @Query("SELECT * FROM file_index ORDER BY modifiedAt DESC")
     fun getAllFiles(): Flow<List<FileIndex>>
 
-    @Query("SELECT * FROM file_index WHERE shouldBackup = 1 AND isBackedUp = 0")
+    // ═══════════════════════════════════════════════════════════════════
+    // Sprint 2.5 FIX: Exclude PULL files from the upload queue.
+    // Old query: WHERE shouldBackup = 1 AND isBackedUp = 0
+    // New query: adds AND syncDirection = 'PUSH'
+    //
+    // Without this, every file downloaded from the Master would be
+    // re-uploaded back to the Master, creating an infinite sync loop.
+    // ═══════════════════════════════════════════════════════════════════
+    @Query("SELECT * FROM file_index WHERE shouldBackup = 1 AND isBackedUp = 0 AND syncDirection = 'PUSH'")
     fun getFilesToBackup(): Flow<List<FileIndex>>
 
     @Query("SELECT * FROM file_index WHERE isBackedUp = 1")
@@ -40,7 +47,6 @@ interface FileIndexDao {
 
     @Query("UPDATE file_index SET serverFileId = :serverFileID WHERE id = :fileId")
     suspend fun setServerFileId(fileId: Long, serverFileID: Long)
-
 
     // Count and sum operations
     @Query("SELECT COUNT(*) FROM file_index")
@@ -76,11 +82,9 @@ interface FileIndexDao {
     @Query("SELECT * FROM file_index WHERE id = :id")
     suspend fun findById(id: Long): FileIndex?
 
-    // ADD: Missing clearAllFiles method
     @Query("DELETE FROM file_index")
     suspend fun clearAllFiles()
 
-    // Additional utility methods for better file management
     @Query("DELETE FROM file_index WHERE isBackedUp = 1")
     suspend fun clearBackedUpFiles()
 
@@ -95,4 +99,20 @@ interface FileIndexDao {
 
     @Query("UPDATE file_index SET errorMessage = :errorMessage, lastAttemptedAt = :attemptedAt WHERE id = :fileId")
     suspend fun markAsError(fileId: Long, errorMessage: String, attemptedAt: Date)
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Sprint 2.5: Pull-sync queries
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** Check if we already have a file with this checksum (any sync direction) */
+    @Query("SELECT COUNT(*) FROM file_index WHERE checksum = :checksum")
+    suspend fun countByChecksum(checksum: String): Int
+
+    /** Get all pulled files (for display/debugging) */
+    @Query("SELECT * FROM file_index WHERE syncDirection = 'PULL' ORDER BY backedUpAt DESC")
+    fun getPulledFiles(): Flow<List<FileIndex>>
+
+    /** Count pulled files */
+    @Query("SELECT COUNT(*) FROM file_index WHERE syncDirection = 'PULL'")
+    suspend fun countPulledFiles(): Int
 }

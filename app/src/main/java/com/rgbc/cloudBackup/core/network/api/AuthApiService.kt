@@ -12,7 +12,7 @@ interface AuthApiService {
     suspend fun login(@Body request: LoginRequest): Response<AuthResponse>
 
     // NEW: Google OAuth login
-    @POST("api/auth/google")
+    @POST("api/auth/google-signin")
     suspend fun googleLogin(@Body request: GoogleLoginRequest): Response<AuthResponse>
 
     @POST("api/auth/logout")

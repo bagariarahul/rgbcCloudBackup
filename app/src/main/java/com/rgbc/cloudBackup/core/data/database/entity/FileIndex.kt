@@ -12,7 +12,8 @@ import java.util.Date
         Index(value = ["checksum"], unique = true),
         Index(value = ["path"], unique = true),
         Index(value = ["shouldBackup"]),
-        Index(value = ["isBackedUp"])
+        Index(value = ["isBackedUp"]),
+        Index(value = ["syncDirection"])  // Sprint 2.5: fast pull-filter queries
     ]
 )
 data class FileIndex(
@@ -52,7 +53,6 @@ data class FileIndex(
     @ColumnInfo(name = "mimeType")
     val mimeType: String? = null,
 
-    // New fields for error tracking:
     @ColumnInfo(name = "lastAttemptedAt")
     val lastAttemptedAt: Date? = null,
 
@@ -60,5 +60,11 @@ data class FileIndex(
     val errorMessage: String? = null,
 
     @ColumnInfo(name = "serverFileId")
-    val serverFileId: Long? = null
+    val serverFileId: Long? = null,
+
+    // ── Sprint 2.5: Sync direction ──────────────────────────────────
+    // "PUSH" = file originated on this device (should be uploaded)
+    // "PULL" = file was downloaded from the Master (should NOT be re-uploaded)
+    @ColumnInfo(name = "syncDirection", defaultValue = "PUSH")
+    val syncDirection: String = "PUSH"
 )

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rgbc.cloudBackup.core.preferences.SettingsManager
 import com.rgbc.cloudBackup.core.service.BackupScheduler
+import com.rgbc.cloudBackup.core.service.SyncPullScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
@@ -17,7 +18,9 @@ data class SettingsUiState(
     val wifiOnly: Boolean = true,
     val backupIntervalHours: Long = 1L,
     val encryptionEnabled: Boolean = true,
-    val compressionEnabled: Boolean = true
+    val compressionEnabled: Boolean = true,
+    // Sprint 2.5: Pull sync from Master
+    val pullSyncEnabled: Boolean = true
 )
 
 @HiltViewModel
@@ -30,21 +33,22 @@ class SettingsViewModel @Inject constructor(
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     init {
-        // Combine all DataStore flows into a single UI state
         viewModelScope.launch {
             combine(
                 settingsManager.autoBackupEnabled,
                 settingsManager.backupOnWifiOnly,
                 settingsManager.backupIntervalHours,
                 settingsManager.encryptionEnabled,
-                settingsManager.compressionEnabled
-            ) { autoBackup, wifiOnly, interval, encryption, compression ->
+                settingsManager.compressionEnabled,
+                settingsManager.pullSyncEnabled
+            ) { values ->
                 SettingsUiState(
-                    autoBackupEnabled = autoBackup,
-                    wifiOnly = wifiOnly,
-                    backupIntervalHours = interval,
-                    encryptionEnabled = encryption,
-                    compressionEnabled = compression
+                    autoBackupEnabled = values[0] as Boolean,
+                    wifiOnly = values[1] as Boolean,
+                    backupIntervalHours = values[2] as Long,
+                    encryptionEnabled = values[3] as Boolean,
+                    compressionEnabled = values[4] as Boolean,
+                    pullSyncEnabled = values[5] as Boolean
                 )
             }.collect { state ->
                 _uiState.value = state
@@ -52,20 +56,14 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // ── Toggle: Enable Background Backups ────────────────────────────────
+    // ── Toggle: Enable Background Backups (Push) ────────────────────────
     fun setAutoBackupEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.setAutoBackupEnabled(enabled)
-
             if (enabled) {
-                // Re-schedule with current interval and wifi settings
-                val currentState = _uiState.value
-                BackupScheduler.schedulePeriodic(
-                    context = context,
-                    intervalHours = currentState.backupIntervalHours,
-                    wifiOnly = currentState.wifiOnly
-                )
-                Timber.i("⏰ Background backups enabled (${currentState.backupIntervalHours}h)")
+                val s = _uiState.value
+                BackupScheduler.schedulePeriodic(context, s.backupIntervalHours, s.wifiOnly)
+                Timber.i("⏰ Background backups enabled (${s.backupIntervalHours}h)")
             } else {
                 BackupScheduler.cancelAll(context)
                 Timber.i("⏰ Background backups disabled")
@@ -73,51 +71,58 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // ── Toggle: Wi-Fi Only ───────────────────────────────────────────────
+    // ── Toggle: Wi-Fi Only ──────────────────────────────────────────────
     fun setWifiOnly(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.setBackupOnWifiOnly(enabled)
-
-            // Re-schedule with updated constraint if backups are active
-            val currentState = _uiState.value
-            if (currentState.autoBackupEnabled) {
-                BackupScheduler.schedulePeriodic(
-                    context = context,
-                    intervalHours = currentState.backupIntervalHours,
-                    wifiOnly = enabled
-                )
-                Timber.i("📶 WiFi-only constraint updated: $enabled")
+            val s = _uiState.value
+            if (s.autoBackupEnabled) {
+                BackupScheduler.schedulePeriodic(context, s.backupIntervalHours, enabled)
             }
         }
     }
 
-    // ── Selector: Backup Interval ────────────────────────────────────────
+    // ── Selector: Backup Interval ───────────────────────────────────────
     fun setBackupInterval(hours: Long) {
         viewModelScope.launch {
             settingsManager.setBackupIntervalHours(hours)
-
-            // Re-schedule with new interval if backups are active
-            val currentState = _uiState.value
-            if (currentState.autoBackupEnabled) {
-                BackupScheduler.schedulePeriodic(
-                    context = context,
-                    intervalHours = hours,
-                    wifiOnly = currentState.wifiOnly
-                )
-                Timber.i("⏰ Backup interval changed to ${hours}h")
+            val s = _uiState.value
+            if (s.autoBackupEnabled) {
+                BackupScheduler.schedulePeriodic(context, hours, s.wifiOnly)
             }
         }
     }
 
     fun setEncryptionEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsManager.setEncryptionEnabled(enabled)
-        }
+        viewModelScope.launch { settingsManager.setEncryptionEnabled(enabled) }
     }
 
     fun setCompressionEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.setCompressionEnabled(enabled) }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Sprint 2.5: Toggle: Pull Sync from Master
+    //
+    // When enabled:  SyncPullWorker runs every 15 minutes to download
+    //                new files from the Master Node.
+    // When disabled: SyncPullWorker is cancelled. No files are pulled.
+    // ═══════════════════════════════════════════════════════════════════
+    fun setPullSyncEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            settingsManager.setCompressionEnabled(enabled)
+            settingsManager.setPullSyncEnabled(enabled)
+            if (enabled) {
+                val s = _uiState.value
+                SyncPullScheduler.schedulePeriodic(
+                    context = context,
+                    intervalMinutes = 15,
+                    wifiOnly = s.wifiOnly
+                )
+                Timber.i("📥 Pull sync enabled (every 15 min)")
+            } else {
+                SyncPullScheduler.cancelAll(context)
+                Timber.i("📥 Pull sync disabled")
+            }
         }
     }
 }

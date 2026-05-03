@@ -9,10 +9,10 @@ import com.rgbc.cloudBackup.features.directory.data.BackupDirectoryDao
     entities = [
         FileIndex::class,
         BackupDirectory::class,
-        BackupQueue::class           // Was missing — required for BackupQueueDao
+        BackupQueue::class
     ],
-    version = 6,                     // Bumped from 5 → 6 for BackupQueue + serverFileId
-    exportSchema = true              // Re-enabled: generates JSON schemas for migration testing
+    version = 7,                     // Bumped from 6 → 7 for syncDirection column
+    exportSchema = true
 )
 @TypeConverters(DateConverter::class)
 abstract class CloudBackupDatabase : RoomDatabase() {
@@ -21,5 +21,5 @@ abstract class CloudBackupDatabase : RoomDatabase() {
 
     abstract fun backupDirectoryDao(): BackupDirectoryDao
 
-    abstract fun backupQueueDao(): BackupQueueDao   // Was missing entirely
+    abstract fun backupQueueDao(): BackupQueueDao
 }

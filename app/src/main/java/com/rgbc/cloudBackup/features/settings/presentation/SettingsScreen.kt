@@ -26,7 +26,6 @@ fun SettingsScreen(
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
     val settings by settingsViewModel.uiState.collectAsStateWithLifecycle()
 
-    // Interval picker dialog state
     var showIntervalPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -38,7 +37,6 @@ fun SettingsScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Header
         Text(
             text = "Settings",
             style = MaterialTheme.typography.headlineMedium,
@@ -72,10 +70,10 @@ fun SettingsScreen(
                 )
             }
 
-            // ── Backup Section (WIRED TO DATASTORE) ─────────────────
+            // ── Backup Section (Push) ───────────────────────────────
             item {
                 SettingsSection(
-                    title = "Backup",
+                    title = "Backup (Push to Master)",
                     items = listOf(
                         SettingsItem.Toggle(
                             title = "Background Backups",
@@ -94,11 +92,29 @@ fun SettingsScreen(
                         SettingsItem.Toggle(
                             title = "Wi-Fi Only",
                             subtitle = if (settings.wifiOnly)
-                                "Backups pause on mobile data"
+                                "Sync pauses on mobile data"
                             else
-                                "Backups run on any network",
+                                "Sync runs on any network",
                             enabled = settings.wifiOnly,
                             onToggle = { settingsViewModel.setWifiOnly(it) }
+                        )
+                    )
+                )
+            }
+
+            // ── P2P Sync Section (Pull) — Sprint 2.5 ───────────────
+            item {
+                SettingsSection(
+                    title = "P2P Sync (Pull from Master)",
+                    items = listOf(
+                        SettingsItem.Toggle(
+                            title = "Pull Files from Master",
+                            subtitle = if (settings.pullSyncEnabled)
+                                "New files from your PC sync here every 15 min"
+                            else
+                                "Disabled — this device only uploads",
+                            enabled = settings.pullSyncEnabled,
+                            onToggle = { settingsViewModel.setPullSyncEnabled(it) }
                         )
                     )
                 )
@@ -152,7 +168,7 @@ fun SettingsScreen(
                     items = listOf(
                         SettingsItem.Info(
                             title = "Version",
-                            subtitle = "1.0.0 (Build 1)"
+                            subtitle = "2.0.0 (P2P Build)"
                         ),
                         SettingsItem.Action(
                             title = "Privacy Policy",
@@ -306,22 +322,10 @@ fun ToggleSettingsItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-
-        Switch(
-            checked = enabled,
-            onCheckedChange = onToggle
-        )
+        Switch(checked = enabled, onCheckedChange = onToggle)
     }
 }
 
@@ -341,69 +345,27 @@ fun ActionSettingsItem(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
+                text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
                 color = if (dangerous) MaterialTheme.colorScheme.error else Color.Unspecified
             )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-fun InfoSettingsItem(
-    title: String,
-    subtitle: String
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium
-        )
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+fun InfoSettingsItem(title: String, subtitle: String) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Text(text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
-// Settings Data Classes
 sealed class SettingsItem {
-    data class Toggle(
-        val title: String,
-        val subtitle: String,
-        val enabled: Boolean,
-        val onToggle: (Boolean) -> Unit
-    ) : SettingsItem()
-
-    data class Action(
-        val title: String,
-        val subtitle: String,
-        val action: () -> Unit,
-        val dangerous: Boolean = false
-    ) : SettingsItem()
-
-    data class Info(
-        val title: String,
-        val subtitle: String
-    ) : SettingsItem()
+    data class Toggle(val title: String, val subtitle: String, val enabled: Boolean, val onToggle: (Boolean) -> Unit) : SettingsItem()
+    data class Action(val title: String, val subtitle: String, val action: () -> Unit, val dangerous: Boolean = false) : SettingsItem()
+    data class Info(val title: String, val subtitle: String) : SettingsItem()
 }
 
 fun getEmailFromAuthState(authState: com.rgbc.cloudBackup.core.auth.AuthState): String {
